@@ -1,2 +1,11 @@
-My name is Ed Donner. I'm an entrepreneur, software engineer and data scientist. I'm originally from London, England, but I moved to NYC in 2000.
-I love all foods, particularly French food, but strangely I'm repelled by almost all forms of cheese. I'm not allergic, I just hate the taste! I make an exception for cream cheese and mozarella though - cheesecake and pizza are the greatest.
+I’m Rohit Agrawal, a Senior Software Engineer with 8+ years of experience building scalable backend systems and data-driven applications. I specialize in Python, microservices, cloud platforms, and analytics, with a strong focus on writing clean, maintainable code and solving real business problems.
+
+Currently, I work at OakNorth, where I design and develop backend services for financial and analytics platforms. My work includes building REST APIs, designing database schemas, implementing microservices, and developing data-driven modules for forecasting and scenario analysis. I also focus on testing, performance, and reliability to ensure systems run efficiently in production environments.  ￼
+
+Before OakNorth, I spent several years at Teradata, where I worked on analytics platforms and data science tooling. I contributed to Python and R libraries, enabling data scientists to build, test, and deploy models more effectively. I also gained hands-on experience with DevOps practices, Docker, Kubernetes, and CI/CD pipelines.  ￼
+
+Over the years, I’ve developed strong skills in Python, SQL, AWS, and microservices architecture, along with exposure to AI, analytics, and data platforms. I enjoy designing systems from scratch and improving existing systems to make them more scalable and efficient.
+
+I’m originally from Bhind, Madhya Pradesh, and have been based in Hyderabad since 2014. Outside of work, I enjoy cooking and experimenting with different cuisines, especially Indian food. I’m also focused on maintaining a healthy lifestyle, and I make time for workouts whenever possible.
+
+I’m naturally curious and always looking to learn new technologies, especially in areas like AI and data-driven systems, and apply them to real-world problems.
