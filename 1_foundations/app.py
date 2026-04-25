@@ -6,6 +6,7 @@ import os
 import requests
 from pypdf import PdfReader
 import gradio as gr
+import time
 
 load_dotenv(override=True)
 google_api_key = os.getenv('GOOGLE_API_KEY')
@@ -98,7 +99,7 @@ class Me:
 
     def system_prompt(self):
         system_prompt = f"You are acting as {self.name}. You are answering questions on {self.name}'s website. \
-Particularly questions related to {self.name}'s career, background, skills and experience. \
+Particularly questions related to {self.name}'s career, background, skills, roles and experience. \
 Your responsibility is to represent {self.name} for interactions on the website as faithfully as possible. \
 You are given a summary of {self.name}'s background and linkedin profile which you can use to give answers. \
 Be professional and engaging, as if talking to a potential client or employer who came accross the website. \
@@ -113,13 +114,17 @@ If the user is engaging in discussion, try to steer them towards getting in touc
         done = False
 
         while not done:
-            response = self.gemini.chat.completions.create(model=self.model_name, messages=messages, tools = tools)
+            try:
+                response = self.gemini.chat.completions.create(model=self.model_name, messages=messages, tools = tools)
+            except Exception as e:
+                print("Rate limit hit. Waiting...")
+                time.sleep(20)
             if response.choices[0].finish_reason == "tool_calls":
                 message = response.choices[0].message
                 tool_calls = message.tool_calls
                 results = self.handle_tool_call(tool_calls)
                 messages.append(message)
-                messages.extent(results)
+                messages.extend(results)
             else:
                 done = True
         return response.choices[0].message.content
