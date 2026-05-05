@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────
+#  MediScan AI — Requirements
+#  Install: pip install -r requirements.txt
+#  Or with uv: uv pip install -r requirements.txt
+# ─────────────────────────────────────────────
+
+# Core — OpenAI Agents SDK (includes openai underneath)
+openai-agents>=0.0.19
+
+# Document Parsing
+pymupdf>=1.24.0          # PDF text extraction (import as fitz)
+python-docx>=1.1.0       # DOCX extraction
+
+# Output Generation
+reportlab>=4.1.0         # Programmatic PDF report generation
+Pillow>=10.0.0           # Image handling within PDFs
+
+# UI
+gradio>=4.36.0           # Web UI — also used for HuggingFace Spaces deploy
+
+# Utilities
+python-dotenv>=1.0.0     # Loads .env file
+pydantic>=2.7.0          # Structured output validation (BaseModel for agent output_type)
+tenacity>=8.3.0          # Retry logic for resilient API calls
