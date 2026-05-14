@@ -1,12 +1,12 @@
 """
 tools/recommendation_generator.py — Recommendation Agent for MediScan AI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 
+
 PURPOSE:
     This is Tool 3 in the agentic pipeline — the second real LLM call.
     It takes the ReportFindings produced by report_analyzer.py (Week 3)
     and generates personalized health recommendations.
- 
+
     Pipeline position:
         parse_document()        ← Week 2 (document_parser.py)
             ↓
@@ -15,25 +15,25 @@ PURPOSE:
         generate_recommendations() ← Week 4 (THIS FILE)
             ↓ ReportRecommendations
         app.py display          ← Recommendations tab populated
- 
+
 HOW IT DIFFERS FROM THE ANALYZER AGENT:
- 
+
     report_analyzer_agent:
     — Input:  raw extracted text from the PDF
     — Output: structured extraction of WHAT IS IN the report
     — Temperature: 0.1 (very low — extraction must be precise)
     — Task: extraction and classification
- 
+
     recommendation_agent:
     — Input:  structured findings summary (from ReportFindings)
     — Output: personalized advice DERIVED from those findings
     — Temperature: 0.3 (slightly higher — advice benefits from natural language)
     — Task: interpretation and advice generation
- 
+
     This separation means each agent does ONE thing well.
     The recommendation agent never sees the raw PDF text — it only
     sees the clean structured findings. This keeps it focused.
- 
+
 INPUT PREPARATION — _format_findings_for_recommendation():
     We don't pass the full ReportFindings JSON to the LLM because it
     contains a lot of normal values that don't need recommendations.
@@ -45,19 +45,17 @@ INPUT PREPARATION — _format_findings_for_recommendation():
 """
 
 import logging
-from agents import Agent, Runner, ModelSettings, result
+from agents import Agent, Runner, ModelSettings
 from dotenv.main import logger
 from models.models import github_model
 from custom_data_types import (
-    ReportFindings, 
+    ReportFindings,
     ReportRecommendations,
-    DietaryRecommendation,
-    LifestyleModification,
-    FollowUpAction
+    FollowUpAction,
 )
 from prompts.recommendation_prompt import (
     RECOMMENDATION_SYSTEM_PROMPT,
-    build_recommendation_user_message
+    build_recommendation_user_message,
 )
 
 logger = logging.getLogger("recommendation_generator")
@@ -96,7 +94,7 @@ recommendation_agent = Agent(
     instructions=RECOMMENDATION_SYSTEM_PROMPT,
     output_type=ReportRecommendations,
     model=github_model,
-    model_settings=ModelSettings(temperature=0.3)
+    model_settings=ModelSettings(temperature=0.3),
 )
 
 # ─────────────────────────────────────────────────────────────
@@ -116,18 +114,19 @@ recommendation_agent = Agent(
 #  4. Clinical summary from the analyzer
 # ─────────────────────────────────────────────────────────────
 
+
 def _format_findings_for_recommendation(findings: ReportFindings) -> str:
     """
     Format ReportFindings into a focused text summary for the
     recommendation agent. Highlights abnormal findings first.
- 
+
     Args:
         findings: The ReportFindings object from analyze_report_text()
- 
+
     Returns:
         Formatted string ready to be embedded in the user message.
     """
-    lines:list[str] = []
+    lines: list[str] = []
 
     # ── Report type ───────────────────────────────────────────
     lines.append(f"REPORT TYPE: {findings.report_type.replace('_', ' ').upper()}")
@@ -157,8 +156,8 @@ def _format_findings_for_recommendation(findings: ReportFindings) -> str:
     if findings.lab_values:
         lines.append("ALL LAB VALUES:")
         # Group by flag status — abnormal first
-        abnormal = [ lv for lv in findings.lab_values if lv.flag != "Normal"]
-        normal = [ lv for lv in findings.lab_values if lv.flag == "Normal"]
+        abnormal = [lv for lv in findings.lab_values if lv.flag != "Normal"]
+        normal = [lv for lv in findings.lab_values if lv.flag == "Normal"]
 
         if abnormal:
             lines.append("  Abnormal/Borderline:")
@@ -207,25 +206,25 @@ def _format_findings_for_recommendation(findings: ReportFindings) -> str:
 #  meaningful to display.
 # ─────────────────────────────────────────────────────────────
 
-async def generate_recommendations(
-    findings: ReportFindings) -> ReportRecommendations:
+
+async def generate_recommendations(findings: ReportFindings) -> ReportRecommendations:
     """
     Run the recommendation agent on structured ReportFindings.
- 
+
     Takes the validated findings from analyze_report_text() and
     generates personalized dietary, lifestyle, and follow-up advice.
- 
+
     This function is async because Runner.run() is a coroutine.
     Always await this from the caller.
- 
+
     Args:
         findings: ReportFindings from analyze_report_text()
- 
+
     Returns:
         ReportRecommendations — always returned, never raises.
         On error: returns a ReportRecommendations with error info
         in overall_assessment.
- 
+
     Usage in app.py (Week 5):
         recommendations = await generate_recommendations(findings)
     """
@@ -242,7 +241,7 @@ async def generate_recommendations(
                 "The uploaded document does not appear to be a medical report. "
                 "No recommendations can be generated. Please upload a lab report, "
                 "clinical note, prescription, or discharge summary."
-            )
+            ),
         )
 
     # ── Guard: no abnormal findings ───────────────────────────
@@ -265,7 +264,7 @@ async def generate_recommendations(
                 "No lab values or abnormal findings were extracted from this report. "
                 "If you believe this is an error, please check the Raw Text tab to "
                 "confirm the document was parsed correctly."
-            )
+            ),
         )
 
     # ── Step 1: Format findings for the recommendation agent ──
@@ -284,7 +283,7 @@ async def generate_recommendations(
     user_message = build_recommendation_user_message(
         findings_summary=findings_summary,
         patient_age=findings.patient_context.age,
-        patient_gender=findings.patient_context.gender
+        patient_gender=findings.patient_context.gender,
     )
 
     # ── Step 3: Run the recommendation agent ─────────────────
@@ -295,10 +294,7 @@ async def generate_recommendations(
     try:
         logger.info("Calling recommendation_agent via Runner.run()...")
 
-        result = await Runner.run(
-            recommendation_agent,
-            user_message
-        )
+        result = await Runner.run(recommendation_agent, user_message)
 
         recommendations: ReportRecommendations = result.final_output_as(
             ReportRecommendations
@@ -331,8 +327,9 @@ async def generate_recommendations(
                 f"{str(e)[:200]}. "
                 f"Please try again. Your findings were extracted successfully — "
                 f"only the recommendations step failed."
-            )
+            ),
         )
+
 
 # ─────────────────────────────────────────────────────────────
 #  format_recommendations_for_display()  — UI renderer
@@ -353,47 +350,47 @@ async def generate_recommendations(
 # ─────────────────────────────────────────────────────────────
 
 URGENCY_DISPLAY: dict[str, str] = {
-    "routine":             "✅ Routine — Review at your next scheduled check-up",
-    "consult_soon":        "🟡 Consult Soon — See your physician within 2-4 weeks",
-    "urgent":              "🟠 Urgent — See your physician within 1 week",
+    "routine": "✅ Routine — Review at your next scheduled check-up",
+    "consult_soon": "🟡 Consult Soon — See your physician within 2-4 weeks",
+    "urgent": "🟠 Urgent — See your physician within 1 week",
     "seek_immediate_care": "🚨 Seek Immediate Care — Contact your doctor today",
 }
- 
+
 PRIORITY_EMOJI: dict[str, str] = {
-    "high":   "🔴",
+    "high": "🔴",
     "medium": "🟡",
-    "low":    "🟢",
+    "low": "🟢",
 }
- 
+
 URGENCY_EMOJI: dict[str, str] = {
-    "routine":   "✅",
-    "soon":      "🟡",
-    "urgent":    "🟠",
+    "routine": "✅",
+    "soon": "🟡",
+    "urgent": "🟠",
     "immediate": "🚨",
 }
 
-def format_recommendations_for_display(recs = ReportRecommendations) -> str:
+
+def format_recommendations_for_display(recs=ReportRecommendations) -> str:
     """
     Convert a ReportRecommendations object into markdown for
     the Gradio Recommendations tab.
- 
+
     Args:
         recs: A ReportRecommendations object from generate_recommendations()
- 
+
     Returns:
         Markdown string ready to display in gr.Markdown()
     """
     lines: list[str] = []
- 
+
     # ── Overall urgency banner ────────────────────────────────
     urgency_text = URGENCY_DISPLAY.get(
-        recs.overall_urgency,
-        f"⚠️ {recs.overall_urgency}"
+        recs.overall_urgency, f"⚠️ {recs.overall_urgency}"
     )
     lines += [
         "## 💡 Personalized Recommendations",
         "",
-        f"### ⚡ Overall Assessment",
+        "### ⚡ Overall Assessment",
         "",
         f"**{urgency_text}**",
         "",
@@ -402,11 +399,11 @@ def format_recommendations_for_display(recs = ReportRecommendations) -> str:
         "---",
         "",
     ]
- 
+
     # ── Dietary recommendations ───────────────────────────────
     if recs.dietary_recommendations:
         lines += ["### 🥗 Dietary Recommendations", ""]
- 
+
         for i, diet in enumerate(recs.dietary_recommendations, 1):
             priority_icon = PRIORITY_EMOJI.get(diet.priority, "🟡")
             lines += [
@@ -422,11 +419,11 @@ def format_recommendations_for_display(recs = ReportRecommendations) -> str:
                 foods = ", ".join(diet.foods_to_avoid)
                 lines.append(f"❌ **Reduce/Avoid:** {foods}")
             lines.append("")
- 
+
     # ── Lifestyle modifications ───────────────────────────────
     if recs.lifestyle_modifications:
         lines += ["### 🏃 Lifestyle Modifications", ""]
- 
+
         for i, lifestyle in enumerate(recs.lifestyle_modifications, 1):
             priority_icon = PRIORITY_EMOJI.get(lifestyle.priority, "🟡")
             lines += [
@@ -436,11 +433,11 @@ def format_recommendations_for_display(recs = ReportRecommendations) -> str:
                 f"*Category:* {lifestyle.category.title()}",
                 "",
             ]
- 
+
     # ── Follow-up actions ─────────────────────────────────────
     if recs.follow_up_actions:
         lines += ["### 📅 Follow-Up Actions", ""]
- 
+
         for i, action in enumerate(recs.follow_up_actions, 1):
             urgency_icon = URGENCY_EMOJI.get(action.urgency, "🟡")
             specialist = f" → {action.specialist}" if action.specialist else ""
@@ -450,7 +447,7 @@ def format_recommendations_for_display(recs = ReportRecommendations) -> str:
                 f"*When:* {action.timeframe}{specialist}",
                 "",
             ]
- 
+
     # ── Disclaimer ────────────────────────────────────────────
     lines += [
         "---",
@@ -458,6 +455,5 @@ def format_recommendations_for_display(recs = ReportRecommendations) -> str:
         "",
         "*Generated by MediScan AI · openai/gpt-4.1-mini via AI Models*",
     ]
- 
+
     return "\n".join(lines)
- 

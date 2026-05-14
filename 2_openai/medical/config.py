@@ -53,6 +53,7 @@ MEDICAL_DISCLAIMER: str = (
 #  Validation
 # ─────────────────────────────────────────────
 
+
 def validate_config() -> tuple[bool, list[str]]:
     """
     Validates required environment variables are present.

@@ -25,6 +25,7 @@ print("═" * 60)
 print("\n[1/4] Checking environment variables...")
 try:
     import config
+
     is_valid, errors = config.validate_config()
     if not is_valid:
         print("❌ Missing environment variables:")
@@ -48,12 +49,12 @@ missing = []
 
 packages = [
     ("openai-agents", "agents"),
-    ("gradio",        "gradio"),
-    ("pymupdf",       "fitz"),
-    ("python-docx",   "docx"),
-    ("reportlab",     "reportlab"),
-    ("pydantic",      "pydantic"),
-    ("tenacity",      "tenacity"),
+    ("gradio", "gradio"),
+    ("pymupdf", "fitz"),
+    ("python-docx", "docx"),
+    ("reportlab", "reportlab"),
+    ("pydantic", "pydantic"),
+    ("tenacity", "tenacity"),
     ("python-dotenv", "dotenv"),
 ]
 
@@ -81,22 +82,25 @@ print("\n[3/4] Testing GitHub Models connection...")
 from agents import Agent, Runner
 from models.models import github_model
 
+
 class PingResponse(BaseModel):
     message: str
 
+
 ping_agent = Agent(
     name="Ping Agent",
-    instructions="Reply with exactly: { \"message\": \"pong\" } — nothing else.",
+    instructions='Reply with exactly: { "message": "pong" } — nothing else.',
     output_type=PingResponse,
     model=github_model,
 )
+
 
 async def test_connection() -> bool:
     try:
         result = await Runner.run(ping_agent, "ping")
         response = result.final_output_as(PingResponse)
-        print(f"   ✅ GitHub Models responded")
-        print(f"   ✅ Model: openai/gpt-4.1-mini")
+        print("   ✅ GitHub Models responded")
+        print("   ✅ Model: openai/gpt-4.1-mini")
         print(f"   ✅ Response: {response.message}")
         return True
     except Exception as e:
@@ -112,9 +116,11 @@ async def test_connection() -> bool:
 
 print("\n[4/4] Testing medical classification prompt...")
 
+
 class ReportClassification(BaseModel):
     report_type: str
     confidence: str
+
 
 classifier_agent = Agent(
     name="Classifier Agent",
@@ -128,6 +134,7 @@ classifier_agent = Agent(
     model=github_model,
 )
 
+
 async def test_medical_prompt() -> bool:
     try:
         result = await Runner.run(
@@ -136,10 +143,10 @@ async def test_medical_prompt() -> bool:
                 "Document contains: Complete Blood Count results showing "
                 "hemoglobin 11.2 g/dL, WBC 7,400/μL, platelet count 210,000/μL, "
                 "fasting glucose 118 mg/dL, LDL cholesterol 142 mg/dL."
-            )
+            ),
         )
         classification = result.final_output_as(ReportClassification)
-        print(f"   ✅ Medical prompt test passed")
+        print("   ✅ Medical prompt test passed")
         print(f"   ✅ Classified as : {classification.report_type}")
         print(f"   ✅ Confidence    : {classification.confidence}")
         return True
@@ -152,8 +159,9 @@ async def test_medical_prompt() -> bool:
 #  Run all async tests
 # ─────────────────────────────────────────────
 
+
 async def main():
-    conn_ok    = await test_connection()
+    conn_ok = await test_connection()
     if not conn_ok:
         sys.exit(1)
     medical_ok = await test_medical_prompt()
@@ -163,10 +171,11 @@ async def main():
     print("\n" + "═" * 60)
     print("  ✅ ALL CHECKS PASSED — Week 1 complete!")
     print("═" * 60)
-    print(f"\n  🚀 Ready for Week 2 — Document Parser")
-    print(f"  🤖 Model  : openai/gpt-4.1-mini via GitHub Models")
-    print(f"  🌐 Base   : https://models.github.ai/inference")
-    print(f"  📦 SDK    : openai-agents (Agent + Runner.run)")
+    print("\n  🚀 Ready for Week 2 — Document Parser")
+    print("  🤖 Model  : openai/gpt-4.1-mini via GitHub Models")
+    print("  🌐 Base   : https://models.github.ai/inference")
+    print("  📦 SDK    : openai-agents (Agent + Runner.run)")
     print()
+
 
 asyncio.run(main())

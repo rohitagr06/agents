@@ -1,32 +1,32 @@
 """
 utils/sanitizer.py — Text Sanitization for MediScan AI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 
+
 PURPOSE:
     Raw text extracted from PDFs and DOCX files is messy.
     Before we send it to the LLM, we must clean it up.
- 
+
     Why? Because LLMs work best with clean, structured input.
     Feeding garbage in produces garbage out. Specifically:
- 
+
     PDF PROBLEMS:
     — Extra whitespace and blank lines from layout rendering
     — Hyphenated line breaks ("haemo-\nglobin" instead of "haemoglobin")
     — Garbled encoding artefacts from font embedding (ï¬‚ instead of fl)
     — Page numbers, headers, footers mixed into body text
     — Column layout bleed (text from two columns merging on one line)
- 
+
     DOCX PROBLEMS:
     — Empty paragraphs used as spacers
     — Repeated section headers from styles
     — Track-change fragments (deleted text that was kept in XML)
- 
+
     TOKEN LIMIT PROBLEM:
     — gpt-4.1-mini has a context window. A 30-page discharge summary
       can easily exceed what we can send in one API call.
     — We must chunk long documents intelligently rather than cutting
       them off mid-sentence or sending too little.
- 
+
 WHY A SEPARATE FILE?
     Sanitization is its own domain of logic. Keeping it separate means:
     — Easy to test with just text strings (no file I/O needed)
@@ -46,7 +46,7 @@ import re
 #  These values rarely change and have no reason to be user-configurable.
 #  Keeping them here makes this module self-contained.
 # ─────────────────────────────────────────────────────────────
- 
+
 # Approximate characters per LLM token (conservative estimate)
 # GPT-4 family: ~4 chars per token on average for English medical text
 
@@ -60,7 +60,7 @@ CHARS_PER_TOKEN: int = 4
 MAX_TOKENS_PER_CHUNK: int = 6000
 
 # Therefore, max characters per chunk
-MAX_CHARS_PER_CHUNK = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN # 24000
+MAX_CHARS_PER_CHUNK = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN  # 24000
 
 # Minimum meaningful text length
 # If extracted text is shorter than this, it's probably a
@@ -76,10 +76,11 @@ MIN_MEANINGFUL_LENGTH: int = 100
 #  Order matters — some steps depend on earlier steps having run first.
 # ─────────────────────────────────────────────────────────────
 
+
 def sanitize(raw_text: str) -> str:
     """
     Clean raw extracted text for LLM consumption.
- 
+
     Applies these cleaning steps in order:
         1. Strip form feed characters (\x0c) from PDF page breaks
         2. Fix PDF hyphenated line breaks
@@ -88,10 +89,10 @@ def sanitize(raw_text: str) -> str:
         5. Remove page numbers and common header/footer patterns
         6. Collapse excessive blank lines
         7. Strip leading/trailing whitespace
- 
+
     Args:
         raw_text: The raw text string from document_parser.py
- 
+
     Returns:
         Cleaned text string, ready to be sent to the LLM agent.
         Returns empty string if input is empty.
@@ -101,7 +102,7 @@ def sanitize(raw_text: str) -> str:
         return ""
 
     text = str(raw_text)
-    
+
     # ── Step 1: Fix hyphenated line breaks ───────────────────
     # PDFs often break words across lines with a hyphen.
     # "haemo-\nglobin" should be "haemoglobin"
@@ -120,15 +121,15 @@ def sanitize(raw_text: str) -> str:
     # En dash / Em dash → regular hyphen (for consistency)
 
     replacements = {
-        "\ufb01": "fi",       # fi ligature
-        "\ufb02": "fl",       # fl ligature
-        "\u00a0": " ",        # non-breaking space
-        "\u2013": "-",        # en dash
-        "\u2014": "-",        # em dash
-        "\u2018": "'",        # left single quote
-        "\u2019": "'",        # right single quote
-        "\u201c": '"',        # left double quote
-        "\u201d": '"',        # right double quote
+        "\ufb01": "fi",  # fi ligature
+        "\ufb02": "fl",  # fl ligature
+        "\u00a0": " ",  # non-breaking space
+        "\u2013": "-",  # en dash
+        "\u2014": "-",  # em dash
+        "\u2018": "'",  # left single quote
+        "\u2019": "'",  # right single quote
+        "\u201c": '"',  # left double quote
+        "\u201d": '"',  # right double quote
     }
 
     for bad_char, good_char in replacements.items():
@@ -164,6 +165,7 @@ def sanitize(raw_text: str) -> str:
 
     return text
 
+
 # ─────────────────────────────────────────────────────────────
 #  is_meaningful()  — quality gate
 #
@@ -179,21 +181,23 @@ def sanitize(raw_text: str) -> str:
 #  For now, we detect and inform gracefully.
 # ─────────────────────────────────────────────────────────────
 
+
 def is_meaningful(text: str) -> bool:
     """
     Check whether extracted text has enough content to be worth analyzing.
- 
+
     Returns False if:
     — The text is empty or only whitespace
     — The text is shorter than MIN_MEANINGFUL_LENGTH characters
       (likely a scanned PDF with no text layer, or a blank document)
- 
+
     Returns True if text has meaningful content.
- 
+
     Args:
         text: Cleaned text string (after sanitize() has been called)
     """
     return bool(text) and len(text.strip()) >= MIN_MEANINGFUL_LENGTH
+
 
 # ─────────────────────────────────────────────────────────────
 #  _split_oversized_paragraph()  — private helper
@@ -210,25 +214,26 @@ def is_meaningful(text: str) -> bool:
 #  "Hemoglobin 11.2 g/dL." stays together rather than being cut at
 #  the character limit mid-value.
 # ─────────────────────────────────────────────────────────────
- 
+
+
 def _split_oversized_paragraph(paragraph: str, max_chars: int) -> list[str]:
     """
     Split a single paragraph that exceeds max_chars at sentence boundaries.
- 
+
     Falls back to hard character splitting only if a single sentence
     itself exceeds max_chars (extremely rare in medical text).
- 
+
     Args:
         paragraph: A single paragraph string longer than max_chars
         max_chars:  The character limit per chunk
- 
+
     Returns:
         List of sub-chunks, each within max_chars.
     """
     # Split at sentence boundaries: period, exclamation, question mark
     # followed by whitespace or end of string.
     # We keep the delimiter attached to the sentence using a lookahead.
-    sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+    sentences = re.split(r"(?<=[.!?])\s+", paragraph)
 
     sub_chunks: list[str] = []
     current_parts: list[str] = []
@@ -249,7 +254,7 @@ def _split_oversized_paragraph(paragraph: str, max_chars: int) -> list[str]:
                 current_length = 0
             # Hard split the oversized sentence
             for i in range(0, sentence_len, max_chars):
-                sub_chunks.append(sentence[i:i + max_chars])
+                sub_chunks.append(sentence[i : i + max_chars])
             continue
 
         # Would adding this sentence exceed the limit?
@@ -264,7 +269,7 @@ def _split_oversized_paragraph(paragraph: str, max_chars: int) -> list[str]:
     # Don't forget the last batch
     if current_parts:
         sub_chunks.append(" ".join(current_parts))
- 
+
     return sub_chunks
 
 
@@ -299,14 +304,14 @@ def _split_oversized_paragraph(paragraph: str, max_chars: int) -> list[str]:
 def chunk_text(text: str, max_chars: int = MAX_CHARS_PER_CHUNK) -> list[str]:
     """
     Split long text into LLM-safe chunks at paragraph boundaries.
- 
+
     For most medical reports this returns a list with one item.
     For very long discharge summaries it may return 2-3 chunks.
- 
+
     Args:
         text:      Cleaned text from sanitize()
         max_chars: Maximum characters per chunk (default: 24,000 ≈ 6,000 tokens)
- 
+
     Returns:
         List of text chunk strings. Always at least one element.
         Each chunk is within the max_chars limit.
@@ -368,6 +373,7 @@ def chunk_text(text: str, max_chars: int = MAX_CHARS_PER_CHUNK) -> list[str]:
 
     return chunks
 
+
 # ─────────────────────────────────────────────────────────────
 #  get_text_stats()  — diagnostic metadata
 #
@@ -379,13 +385,14 @@ def chunk_text(text: str, max_chars: int = MAX_CHARS_PER_CHUNK) -> list[str]:
 #  It's also useful for debugging during development.
 # ─────────────────────────────────────────────────────────────
 
+
 def get_text_stats(text: str) -> dict:
     """
     Return diagnostic statistics about the extracted text.
- 
+
     Args:
         text: Cleaned text after sanitize()
- 
+
     Returns:
         dict with keys:
             char_count   : Total character count
@@ -401,15 +408,15 @@ def get_text_stats(text: str) -> dict:
             "word_count": 0,
             "line_count": 0,
             "chunk_count": 0,
-            "is_meaningful": False
+            "is_meaningful": False,
         }
 
     chunks = chunk_text(text)
 
     return {
-            "char_count": len(text),
-            "word_count": len(text.split()),
-            "line_count": len(text.splitlines()),
-            "chunk_count": len(chunks),
-            "is_meaningful": is_meaningful(text)
-        }
+        "char_count": len(text),
+        "word_count": len(text.split()),
+        "line_count": len(text.splitlines()),
+        "chunk_count": len(chunks),
+        "is_meaningful": is_meaningful(text),
+    }

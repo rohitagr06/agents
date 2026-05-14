@@ -12,7 +12,6 @@ Run with:
     uv run python app.py
 """
 
-import asyncio
 import logging
 import gradio as gr
 import config
@@ -552,6 +551,7 @@ _orchestrator = MediScanOrchestrator()
 #   status, session_state, download_btn_update, history_update)
 # ─────────────────────────────────────────────────────────────
 
+
 async def analyze_report(file, session_state: dict):
     """
     Async generator — streams status updates then final result to Gradio.
@@ -563,14 +563,23 @@ async def analyze_report(file, session_state: dict):
     # Rehydrate SessionState from gr.State dict
     # (gr.State serialises to dict — we reconstruct the dataclass)
     state = SessionState(
-        analyses_used      = session_state.get("analyses_used", 0),
-        last_analysis_time = session_state.get("last_analysis_time", 0.0),
-        cache              = session_state.get("_cache_obj", {}),
+        analyses_used=session_state.get("analyses_used", 0),
+        last_analysis_time=session_state.get("last_analysis_time", 0.0),
+        cache=session_state.get("_cache_obj", {}),
     )
 
     # Empty result for streaming intermediate status updates
     def _status_yield(msg: str):
-        return ("", "", "", "", msg, session_state, gr.update(visible=False), gr.update())
+        return (
+            "",
+            "",
+            "",
+            "",
+            msg,
+            session_state,
+            gr.update(visible=False),
+            gr.update(),
+        )
 
     async for update in _orchestrator.run(file, state):
 
@@ -581,22 +590,30 @@ async def analyze_report(file, session_state: dict):
         elif isinstance(update, SessionState):
             # Orchestrator finished — save updated state back to gr.State
             session_state = {
-                "analyses_used":      update.analyses_used,
+                "analyses_used": update.analyses_used,
                 "last_analysis_time": update.last_analysis_time,
-                "_cache_obj":         update.cache,
+                "_cache_obj": update.cache,
             }
 
         elif isinstance(update, AnalysisResult):
             result = update
 
             if not result.success:
-                yield ("", "", "", "", result.status, session_state,
-                       gr.update(visible=False), gr.update())
+                yield (
+                    "",
+                    "",
+                    "",
+                    "",
+                    result.status,
+                    session_state,
+                    gr.update(visible=False),
+                    gr.update(),
+                )
                 return
 
             # Store findings + recs in session_state for PDF download
             session_state["_last_findings"] = result.findings
-            session_state["_last_recs"]     = result.recommendations
+            session_state["_last_recs"] = result.recommendations
 
             # Build history entry
             history_html = _build_history_html(session_state)
@@ -608,7 +625,7 @@ async def analyze_report(file, session_state: dict):
                 result.raw_md,
                 result.status,
                 session_state,
-                gr.update(visible=True),   # show Download PDF button
+                gr.update(visible=True),  # show Download PDF button
                 gr.update(value=history_html),
             )
 
@@ -630,7 +647,7 @@ def download_pdf(session_state: dict):
     one click on filename → browser downloads the PDF.
     """
     findings = session_state.get("_last_findings")
-    recs     = session_state.get("_last_recs")
+    recs = session_state.get("_last_recs")
 
     if findings is None or recs is None:
         logger.warning("Download PDF clicked but no analysis in session.")
@@ -647,14 +664,18 @@ def download_pdf(session_state: dict):
 async def clear_all():
     """Reset all outputs and session state."""
     empty_state = {
-        "analyses_used":      0,
+        "analyses_used": 0,
         "last_analysis_time": 0.0,
-        "_cache_obj":         {},
-        "_last_findings":     None,
-        "_last_recs":         None,
+        "_cache_obj": {},
+        "_last_findings": None,
+        "_last_recs": None,
     }
     return (
-        None, "", "", "", "",
+        None,
+        "",
+        "",
+        "",
+        "",
         "Ready. Upload a report to begin.",
         empty_state,
         gr.update(visible=False),
@@ -676,11 +697,13 @@ def _build_history_html(session_state: dict) -> str:
         return _HISTORY_PLACEHOLDER
 
     rows = ""
-    for entry in reversed(entries):   # newest first
-        urgency_icon = {"routine": "✅", "consult_soon": "🟡",
-                        "urgent": "🔴", "seek_immediate_care": "🚨"}.get(
-            entry.get("urgency", "routine"), "⚪"
-        )
+    for entry in reversed(entries):  # newest first
+        urgency_icon = {
+            "routine": "✅",
+            "consult_soon": "🟡",
+            "urgent": "🔴",
+            "seek_immediate_care": "🚨",
+        }.get(entry.get("urgency", "routine"), "⚪")
         rows += (
             f"<div style='padding:6px 8px; border-bottom:1px solid rgba(0,196,180,0.1);'>"
             f"<div style='font-size:0.8rem; color:#A8C0D6;'>{entry['time']}</div>"
@@ -694,6 +717,7 @@ def _build_history_html(session_state: dict) -> str:
 # ─────────────────────────────────────────────
 #  Build Gradio UI
 # ─────────────────────────────────────────────
+
 
 def build_ui() -> gr.Blocks:
     with gr.Blocks(
@@ -709,14 +733,16 @@ def build_ui() -> gr.Blocks:
         # ── Hidden session state ──────────────────────────────
         # gr.State() persists per browser session — cleared on refresh.
         # Stores: analyses_used, last_analysis_time, cache, last findings/recs.
-        session_state = gr.State({
-            "analyses_used":      0,
-            "last_analysis_time": 0.0,
-            "_cache_obj":         {},
-            "_last_findings":     None,
-            "_last_recs":         None,
-            "_history":           [],
-        })
+        session_state = gr.State(
+            {
+                "analyses_used": 0,
+                "last_analysis_time": 0.0,
+                "_cache_obj": {},
+                "_last_findings": None,
+                "_last_recs": None,
+                "_history": [],
+            }
+        )
 
         # ── Header ──
         gr.HTML(HEADER_HTML)
@@ -868,14 +894,14 @@ def build_ui() -> gr.Blocks:
             fn=analyze_report,
             inputs=[file_input, session_state],
             outputs=[
-                findings_output,        # 1
-                recommendations_output, # 2
-                summary_output,         # 3
-                raw_output,             # 4
-                status_box,             # 5
-                session_state,          # 6 — updated rate limit + cache
-                download_btn,           # 7 — visible=True on success
-                history_panel,          # 8 — updated HTML
+                findings_output,  # 1
+                recommendations_output,  # 2
+                summary_output,  # 3
+                raw_output,  # 4
+                status_box,  # 5
+                session_state,  # 6 — updated rate limit + cache
+                download_btn,  # 7 — visible=True on success
+                history_panel,  # 8 — updated HTML
             ],
             show_progress="full",
         )
@@ -930,8 +956,8 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     print(f"\n🫀 Starting {config.APP_TITLE} {config.APP_VERSION}")
-    print(f"   Model       : openai/gpt-4.1-mini via GitHub Models")
-    print(f"   SDK         : openai-agents (Agent + Runner.run)")
+    print("   Model       : openai/gpt-4.1-mini via GitHub Models")
+    print("   SDK         : openai-agents (Agent + Runner.run)")
     print(f"   Environment : {config.APP_ENV}")
     print(f"   Port        : {config.GRADIO_SERVER_PORT}")
     print(f"   Share       : {config.GRADIO_SHARE}")

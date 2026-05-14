@@ -16,8 +16,7 @@ ROOT CAUSE OF THE TATA 1MG FORMATTING PROBLEM:
 """
 
 import re
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import fitz
 from docx import Document as DocxDocument
@@ -25,25 +24,25 @@ from docx import Document as DocxDocument
 from utils.validator import validate_file, ValidationResult
 from utils.sanitizer import sanitize, get_text_stats
 
-
 # ─────────────────────────────────────────────────────────────
 #  ParsedDocument — structured output of this tool
 # ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ParsedDocument:
-    success:       bool
-    text:          str
-    raw_text:      str   = ""
-    file_name:     str   = ""
-    extension:     str   = ""
-    page_count:    int   = 0
-    word_count:    int   = 0
-    char_count:    int   = 0
-    chunk_count:   int   = 1
-    is_meaningful: bool  = False
-    warning:       str   = ""
-    error:         str   = ""
+    success: bool
+    text: str
+    raw_text: str = ""
+    file_name: str = ""
+    extension: str = ""
+    page_count: int = 0
+    word_count: int = 0
+    char_count: int = 0
+    chunk_count: int = 1
+    is_meaningful: bool = False
+    warning: str = ""
+    error: str = ""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -104,7 +103,7 @@ def _extract_page_text(page) -> str:
         cells = []
         for block in row:
             # Normalize internal newlines within a cell to spaces
-            cell = re.sub(r'\s*\n\s*', ' ', block[4]).strip()
+            cell = re.sub(r"\s*\n\s*", " ", block[4]).strip()
             if cell:
                 cells.append(cell)
 
@@ -121,6 +120,7 @@ def _extract_page_text(page) -> str:
 # ─────────────────────────────────────────────────────────────
 #  _parse_pdf()
 # ─────────────────────────────────────────────────────────────
+
 
 def _parse_pdf(file_path: str, file_name: str) -> ParsedDocument:
     doc = None
@@ -162,12 +162,18 @@ def _parse_pdf(file_path: str, file_name: str) -> ParsedDocument:
 
     except fitz.FileDataError as e:
         return ParsedDocument(
-            success=False, text="", file_name=file_name, extension="pdf",
+            success=False,
+            text="",
+            file_name=file_name,
+            extension="pdf",
             error=f"PDF appears to be corrupted or is not a valid PDF file. ({e})",
         )
     except Exception as e:
         return ParsedDocument(
-            success=False, text="", file_name=file_name, extension="pdf",
+            success=False,
+            text="",
+            file_name=file_name,
+            extension="pdf",
             error=f"Unexpected error reading PDF: ({e})",
         )
     finally:
@@ -178,6 +184,7 @@ def _parse_pdf(file_path: str, file_name: str) -> ParsedDocument:
 # ─────────────────────────────────────────────────────────────
 #  _parse_docx()
 # ─────────────────────────────────────────────────────────────
+
 
 def _parse_docx(file_path: str, file_name: str, extension: str) -> ParsedDocument:
     try:
@@ -227,10 +234,14 @@ def _parse_docx(file_path: str, file_name: str, extension: str) -> ParsedDocumen
     except Exception as e:
         error_message = (
             "Legacy .doc format could not be read. Please resave as .docx."
-            if extension == "doc" else str(e)
+            if extension == "doc"
+            else str(e)
         )
         return ParsedDocument(
-            success=False, text="", file_name=file_name, extension=extension,
+            success=False,
+            text="",
+            file_name=file_name,
+            extension=extension,
             error=f"Error reading Word document: {error_message}",
         )
 
@@ -238,6 +249,7 @@ def _parse_docx(file_path: str, file_name: str, extension: str) -> ParsedDocumen
 # ─────────────────────────────────────────────────────────────
 #  parse_document()  — MAIN PUBLIC FUNCTION
 # ─────────────────────────────────────────────────────────────
+
 
 def parse_document(file: object) -> ParsedDocument:
     """
@@ -265,7 +277,10 @@ def parse_document(file: object) -> ParsedDocument:
         return _parse_docx(file_path, file_name, extension)
     else:
         return ParsedDocument(
-            success=False, text="", file_name=file_name, extension=extension,
+            success=False,
+            text="",
+            file_name=file_name,
+            extension=extension,
             error=f"Internal error: unhandled file type '.{extension}'.",
         )
 
@@ -274,14 +289,17 @@ def parse_document(file: object) -> ParsedDocument:
 #  format_parsed_for_display()  — UI helper
 # ─────────────────────────────────────────────────────────────
 
+
 def format_parsed_for_display(parsed: ParsedDocument) -> str:
     """Format a ParsedDocument into markdown for the Gradio Raw Text tab."""
     if not parsed.success:
         return f"## ❌ Parsing Failed\n\n**Error:** {parsed.error}"
 
     lines = [
-        "## 📄 Extracted Raw Text", "",
-        "| Property | Value |", "|---|---|",
+        "## 📄 Extracted Raw Text",
+        "",
+        "| Property | Value |",
+        "|---|---|",
         f"| **File** | {parsed.file_name} |",
         f"| **Format** | .{parsed.extension.upper()} |",
         f"| **Pages** | {parsed.page_count} |",
@@ -295,7 +313,8 @@ def format_parsed_for_display(parsed: ParsedDocument) -> str:
         lines += [f"> {parsed.warning}", ""]
 
     lines += [
-        "### Raw Content", "```",
+        "### Raw Content",
+        "```",
         parsed.raw_text[:3000] + ("..." if len(parsed.raw_text) > 3000 else ""),
         "```",
     ]

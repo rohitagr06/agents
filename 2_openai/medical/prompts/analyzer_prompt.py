@@ -1,47 +1,47 @@
 """
 prompts/analyzer_prompt.py — System Prompt for Report Analyzer Agent
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 
+
 PURPOSE:
     This file contains the system prompt for the report_analyzer_agent.
     The system prompt is the most important thing you write when building
     an agent — it defines the agent's identity, task, constraints, and
     output format.
- 
+
 WHY A SEPARATE FILE FOR THE PROMPT?
     In your Deep Research project, instructions were short strings
     defined inline inside each agent file. That works well for simple
     agents. But for medical analysis, the prompt is complex enough
     that it deserves its own file because:
- 
+
     1. MAINTAINABILITY
        Prompts need to be tuned and improved frequently as you discover
        edge cases. Editing a 200-line prompt is easier in its own file
        than hunting for it inside a file full of Python code.
- 
+
     2. TESTABILITY
        You can print and review ANALYZER_SYSTEM_PROMPT independently
        without running any agents. You can spot mistakes by reading it.
- 
+
     3. REUSABILITY
        The orchestrator in Week 5 may need to inject context into the
        prompt dynamically. Having it as a Python string constant makes
        that easy with f-strings or .format().
- 
+
     4. SEPARATION OF CONCERNS
        tools/report_analyzer.py handles "how to run the agent"
        prompts/analyzer_prompt.py handles "what the agent is told"
        These are different concerns — separating them makes both
        files easier to understand independently.
- 
+
 PROMPT ENGINEERING PRINCIPLES APPLIED HERE:
- 
+
     1. CLEAR ROLE DEFINITION
        The agent is told exactly who it is in the first sentence.
        Vague roles ("you are a helpful assistant") produce vague output.
        Specific roles ("you are a medical document extraction specialist")
        produce specific, focused output.
- 
+
     2. EXTRACTION ONLY — NO ADVICE
        The prompt explicitly tells the agent NOT to give lifestyle advice,
        dietary recommendations, or follow-up suggestions. This is critical
@@ -49,19 +49,19 @@ PROMPT ENGINEERING PRINCIPLES APPLIED HERE:
        a) It keeps extraction clean and uncontaminated
        b) A dedicated recommendation agent (Week 4) does this better
           with its own focused prompt
- 
+
     3. EXPLICIT OUTPUT CONSTRAINTS
        The prompt tells the agent exactly what to do for edge cases:
        — What if a field is missing? → use null
        — What if the document is not medical? → set is_non_medical=true
        — What if a value is ambiguous? → set confidence="low"
        Never leave edge case behaviour up to the LLM to decide.
- 
+
     4. SAFETY GUARDRAILS
        Medical AI must never overstate certainty. The prompt explicitly
        instructs the agent to use clinical language conservatively,
        never diagnose, and flag its own uncertainty.
- 
+
     5. TEMPERATURE IS LOW (0.1)
        Set in report_analyzer.py via ModelSettings. Low temperature
        means the model is more deterministic and less "creative".
@@ -210,22 +210,24 @@ Never wrap your response in markdown code fences.
 #  — These small cues measurably improve extraction accuracy
 # ─────────────────────────────────────────────────────────────
 
+
 def build_analyzer_user_message(
     extracted_text: str,
     file_name: str = "medical_report",
     page_count: int = 1,
     chunk_index: int = 1,
-    total_chunks: int = 1) -> str:
+    total_chunks: int = 1,
+) -> str:
     """
     Build the user message to send to the analyzer agent.
- 
+
     Args:
         extracted_text: The sanitized text from document_parser.py
         file_name:      Original filename for context
         page_count:     Number of pages in the document
         chunk_index:    Which chunk this is (1-based) if document was split
         total_chunks:   Total number of chunks (1 for most reports)
- 
+
     Returns:
         Formatted string to pass as the user message to Runner.run()
     """
@@ -247,4 +249,3 @@ def build_analyzer_user_message(
         f"--- DOCUMENT TEXT END ---\n\n"
         f"Extract all information and return the structured ReportFindings JSON."
     )
-

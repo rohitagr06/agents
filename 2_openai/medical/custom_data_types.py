@@ -1,58 +1,58 @@
 """
 custom_data_types.py — Pydantic Data Models for MediScan AI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 
+
 PURPOSE:
     This file defines ALL structured data types used across the
     entire agentic pipeline — exactly like your Deep Research project
     used WebSearchItem, WebSearchPlan, and ReportData.
- 
+
     Every Agent in MediScan AI that has an output_type= parameter
     uses a class defined in THIS file. That means:
- 
+
         report_analyzer_agent   → output_type=ReportFindings
         recommendation_agent    → output_type=ReportRecommendations  (Week 4)
         orchestrator            → uses both above                     (Week 5)
- 
+
 WHY A SINGLE CENTRAL FILE FOR ALL DATA TYPES?
     In your Deep Research project, you defined WebSearchItem,
     WebSearchPlan, and ReportData all in one place (custom_data_types.py).
     We follow the exact same pattern here because:
- 
+
     1. SINGLE SOURCE OF TRUTH
        If LabValue has a "flag" field, every agent, every prompt,
        and every UI renderer sees the same definition. There's no
        risk of one file having flag: str and another having flag: bool.
- 
+
     2. PREVENTS CIRCULAR IMPORTS
        Agent files import data types. Data type files should import
        nothing from agent files. Keeping all types here means:
        tools/report_analyzer.py → imports from custom_data_types ✅
        custom_data_types.py     → imports nothing from tools/     ✅
        No circular dependency is possible.
- 
+
     3. EASY TO EVOLVE
        When Week 4 adds ReportRecommendations, we add it here.
        When RC2 adds ImageFinding for radiology reports, we add it here.
        All agents automatically get the updated types.
- 
+
 HOW PYDANTIC WORKS WITH THE OPENAI AGENTS SDK:
     When you set output_type=ReportFindings on an Agent, the SDK:
     1. Converts ReportFindings to a JSON Schema and adds it to the
        system prompt as instructions for how to format the response
     2. Parses the LLM's JSON response and validates it against the schema
     3. Returns a proper Python ReportFindings object from Runner.run()
- 
+
     You then access it as:
         result = await Runner.run(report_analyzer_agent, text)
         findings = result.final_output_as(ReportFindings)
         findings.report_type   # "lab_report"
         findings.lab_values    # list[LabValue]
- 
+
     If the LLM returns malformed JSON or missing required fields,
     Pydantic raises a ValidationError automatically — no manual
     checking needed.
- 
+
 FIELD DESCRIPTIONS:
     Every field has a description= in its Field() definition.
     This is NOT just documentation — the Agents SDK includes these
@@ -60,6 +60,7 @@ FIELD DESCRIPTIONS:
     improves the quality of the LLM's output. More specific
     descriptions = more accurate structured output.
 """
+
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -78,11 +79,13 @@ from typing import Optional
 #  — Future agents can do math on numeric values
 # ─────────────────────────────────────────────────────────────
 
+
 class LabValue(BaseModel):
     """
     A single measured lab parameter from a medical report.
     Used inside ReportFindings.lab_values list.
     """
+
     parameter: str = Field(
         description=(
             "The name of the measured parameter. "
@@ -116,19 +119,22 @@ class LabValue(BaseModel):
             "A brief clinical interpretation of this specific value, if noteworthy. "
             "Example: 'Consistent with mild iron-deficiency anemia.' "
             "Leave null for values that are within normal range."
-        )
+        ),
     )
+
 
 # ─────────────────────────────────────────────────────────────
 #  MedicationItem — a single medication from a prescription
 #  or discharge summary
 # ─────────────────────────────────────────────────────────────
 
+
 class MedicationItem(BaseModel):
     """
     A single medication entry from a prescription or discharge summary.
     Used inside ReportFindings.medications list.
     """
+
     name: str = Field(
         description=(
             "The name of the medication, exactly as written in the report. "
@@ -149,8 +155,9 @@ class MedicationItem(BaseModel):
             "The condition or purpose this medication is prescribed for, if stated. "
             "Example: 'For type 2 diabetes management', 'For cholesterol control'. "
             "Leave null if purpose is not mentioned in the report."
-        )
+        ),
     )
+
 
 # ─────────────────────────────────────────────────────────────
 #  AbnormalFlag — a highlighted abnormal finding
@@ -164,11 +171,13 @@ class MedicationItem(BaseModel):
 #  whether they are lab-based or clinically observed.
 # ─────────────────────────────────────────────────────────────
 
+
 class AbnormalFlag(BaseModel):
     """
     A single abnormal or concerning finding from any part of the report.
     Used inside ReportFindings.abnormal_flags list.
     """
+
     finding: str = Field(
         description=(
             "A clear, concise description of the abnormal finding. "
@@ -195,6 +204,7 @@ class AbnormalFlag(BaseModel):
         )
     )
 
+
 # ─────────────────────────────────────────────────────────────
 #  PatientContext — basic patient info extracted from the report
 #
@@ -210,18 +220,20 @@ class AbnormalFlag(BaseModel):
 #  as unknown and the recommendation agent works with what it has.
 # ─────────────────────────────────────────────────────────────
 
+
 class PatientContext(BaseModel):
     """
     Basic patient information extracted from the report header.
     All fields are Optional because reports may omit any of these.
     """
+
     patient_name: Optional[str] = Field(
         default=None,
         description=(
             "Full name of the patient as found in the report header. "
             "Examples: 'Rohit Sharma', 'John Doe', 'R. Kumar'. "
             "Leave null if no patient name is explicitly stated in the document."
-        )
+        ),
     )
     age: Optional[str] = Field(
         default=None,
@@ -229,7 +241,7 @@ class PatientContext(BaseModel):
             "Patient age as found in the report. "
             "Examples: '45 years', '32', 'Not specified'. "
             "Leave null if not mentioned anywhere in the report."
-        )
+        ),
     )
     gender: Optional[str] = Field(
         default=None,
@@ -237,7 +249,7 @@ class PatientContext(BaseModel):
             "Patient gender as found in the report. "
             "Examples: 'Male', 'Female', 'Not specified'. "
             "Leave null if not mentioned."
-        )
+        ),
     )
     report_date: Optional[str] = Field(
         default=None,
@@ -245,14 +257,14 @@ class PatientContext(BaseModel):
             "The date of the report or sample collection, as written. "
             "Examples: '01/05/2025', 'May 1, 2025', 'Not specified'. "
             "Leave null if no date found."
-        )
+        ),
     )
     ordering_physician: Optional[str] = Field(
-        default = None,
+        default=None,
         description=(
             "Name of the doctor or physician who ordered the report, if stated. "
             "Leave null if not found."
-        )
+        ),
     )
 
 
@@ -276,16 +288,18 @@ class PatientContext(BaseModel):
 # ─────────────────────────────────────────────────────────────
 # "IMPORTANT: If is_non_medical is true, set this to an empty string ''."
 
+
 class ReportFindings(BaseModel):
     """
     Complete structured extraction of a medical report.
     This is the output_type of report_analyzer_agent.
- 
+
     Contains everything extracted from the document — lab values,
     medications, abnormal flags, patient context, and a brief summary.
     Does NOT contain recommendations or lifestyle advice — that is
     the job of ReportRecommendations (Week 4).
     """
+
     report_type: str = Field(
         description=(
             "The type of medical report. "
@@ -311,7 +325,7 @@ class ReportFindings(BaseModel):
             "Include ALL values — both normal and abnormal. "
             "Empty list if the report contains no numeric lab values "
             "(e.g. a clinical note with no bloodwork)."
-        )
+        ),
     )
     medications: list[MedicationItem] = Field(
         default_factory=list,
@@ -319,7 +333,7 @@ class ReportFindings(BaseModel):
             "List of all medications mentioned in the report. "
             "Include current medications, newly prescribed, and recently stopped. "
             "Empty list if no medications are mentioned."
-        )
+        ),
     )
     abnormal_flags: list[AbnormalFlag] = Field(
         default_factory=list,
@@ -328,7 +342,7 @@ class ReportFindings(BaseModel):
             "Include lab values outside reference range AND clinical observations. "
             "Order by severity: critical first, then severe, moderate, mild. "
             "Empty list if all findings are within normal limits."
-        )
+        ),
     )
     clinical_summary: str = Field(
         description=(
@@ -352,18 +366,19 @@ class ReportFindings(BaseModel):
             "a medical report — it has no patient, no lab values, and no clinical findings. "
             "Set is_non_medical=true for any document that is about insurance, policy, or coverage "
             "rather than about a specific patient's health test results."
-        )
+        ),
     )
     confidence: str = Field(
-        default = "high",
+        default="high",
         description=(
             "Your confidence in the extraction quality. "
             "Must be one of: 'high', 'medium', 'low'. "
             "'high' = clear, well-structured report with complete data. "
             "'medium' = some ambiguity or missing values, extraction is mostly complete. "
             "'low' = report is poorly structured, heavily redacted, or ambiguous."
-        )
+        ),
     )
+
 
 ## ─────────────────────────────────────────────────────────────
 #  DietaryRecommendation — one specific dietary suggestion
@@ -375,8 +390,10 @@ class ReportFindings(BaseModel):
 #  and the advice far more actionable and trustworthy.
 # ─────────────────────────────────────────────────────────────
 
+
 class DietaryRecommendation(BaseModel):
     """One specific dietary suggestion linked to a finding."""
+
     suggestion: str = Field(
         description=(
             "A specific, actionable dietary suggestion. Be concrete — not "
@@ -408,7 +425,7 @@ class DietaryRecommendation(BaseModel):
             "List of specific foods or food groups to increase or add. "
             "Examples: ['spinach', 'lentils', 'fortified cereals', 'lean red meat']. "
             "Empty list if not applicable to this recommendation."
-        )
+        ),
     )
     foods_to_avoid: list[str] = Field(
         default_factory=list,
@@ -416,15 +433,18 @@ class DietaryRecommendation(BaseModel):
             "List of specific foods or food groups to reduce or avoid. "
             "Examples: ['red meat', 'organ meats', 'beer', 'shellfish']. "
             "Empty list if not applicable to this recommendation."
-        )
+        ),
     )
+
 
 # ─────────────────────────────────────────────────────────────
 #  LifestyleModification — one specific lifestyle suggestion
 # ─────────────────────────────────────────────────────────────
 
+
 class LifestyleModification(BaseModel):
     """One specific lifestyle modification recommendation."""
+
     modification: str = Field(
         description=(
             "A specific, actionable lifestyle change. Be concrete — not "
@@ -456,12 +476,15 @@ class LifestyleModification(BaseModel):
         )
     )
 
+
 # ─────────────────────────────────────────────────────────────
 #  FollowUpAction — a specific next step the patient should take
 # ─────────────────────────────────────────────────────────────
 
+
 class FollowUpAction(BaseModel):
     """One specific follow-up action the patient should take."""
+
     action: str = Field(
         description=(
             "A specific next step — a test, appointment, or check the "
@@ -494,8 +517,9 @@ class FollowUpAction(BaseModel):
             "Examples: 'Cardiologist', 'Endocrinologist', 'Nephrologist', "
             "'General Physician / Primary Care'. "
             "Leave null if no specific specialist is needed."
-        )
+        ),
     )
+
 
 # ─────────────────────────────────────────────────────────────
 #  ReportRecommendations — the TOP-LEVEL output of the
@@ -513,15 +537,17 @@ class FollowUpAction(BaseModel):
 #  — The UI can display findings and recommendations independently
 # ─────────────────────────────────────────────────────────────
 
+
 class ReportRecommendations(BaseModel):
     """
     Personalized recommendations generated from ReportFindings.
     This is the output_type of recommendation_agent.
- 
+
     Contains dietary suggestions, lifestyle modifications, follow-up
     actions, and an overall urgency assessment — all grounded in the
     specific lab findings of the patient. No generic advice.
     """
+
     overall_urgency: str = Field(
         description=(
             "The overall urgency level considering ALL findings together. "
@@ -554,7 +580,7 @@ class ReportRecommendations(BaseModel):
             "Do NOT give generic healthy eating advice — every suggestion "
             "must address a specific value from the report. "
             "Empty list only if ALL findings are perfectly normal."
-        )
+        ),
     )
     lifestyle_modifications: list[LifestyleModification] = Field(
         default_factory=list,
@@ -563,7 +589,7 @@ class ReportRecommendations(BaseModel):
             "actual findings. Each must be linked to a specific finding. "
             "Cover exercise, sleep, stress management, hydration as relevant. "
             "Do NOT give generic wellness advice — be specific and targeted."
-        )
+        ),
     )
     follow_up_actions: list[FollowUpAction] = Field(
         default_factory=list,
@@ -572,7 +598,7 @@ class ReportRecommendations(BaseModel):
             "doctor visits, repeat tests, specialist referrals. "
             "Order by urgency: immediate first, routine last. "
             "Every action must be grounded in a specific finding."
-        )
+        ),
     )
     disclaimer: str = Field(
         default=(
@@ -582,7 +608,5 @@ class ReportRecommendations(BaseModel):
             "Always consult a qualified healthcare provider before making "
             "any changes to your diet, lifestyle, or medical care."
         ),
-        description=(
-            "Medical disclaimer. Use the default value — do not modify."
-        )
+        description=("Medical disclaimer. Use the default value — do not modify."),
     )

@@ -19,7 +19,7 @@ WHY A SEPARATE FILE?
     — It's easy to find, test, and modify independently
     — We can import it anywhere without circular dependencies
     — Week 3 agents can also call it before processing
- 
+
 DESIGN PATTERN:
     Every function returns a consistent ValidationResult dataclass so
     callers always get the same shape of data — a success flag, a
@@ -46,11 +46,12 @@ import config
 #      since we don't need JSON serialization here
 # ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ValidationResult:
     """
     Returned by every validate_*() function in this module.
- 
+
     Fields:
         is_valid  : True if validation passed, False if it failed
         message   : Human-readable message shown in the Gradio status bar
@@ -59,12 +60,14 @@ class ValidationResult:
         extension : Lowercase file extension without dot (e.g. "pdf")
         metadata  : Any extra info the caller might find useful
     """
+
     is_valid: bool
     message: str
     file_name: str = ""
     file_size: int = 0
     extension: str = ""
     metadata: dict = field(default_factory=dict)
+
 
 # ─────────────────────────────────────────────────────────────
 #  _get_extension()  — private helper
@@ -80,13 +83,15 @@ class ValidationResult:
 #  This handles edge cases like "report.final.v2.pdf" correctly —
 #  it gives us "pdf", not "report".
 #  [-1] gets the last element. lower() normalises "PDF" → "pdf".
-# ───────────────────────────────────────────────────────────── 
+# ─────────────────────────────────────────────────────────────
+
 
 def _get_extension(filename: str) -> str:
     """Extract and reurn the lowercase file extension without the dot."""
     if "." not in filename:
         return ""
     return filename.rsplit(".", 1)[-1].lower()
+
 
 # ─────────────────────────────────────────────────────────────
 #  _format_size()  — private helper
@@ -97,14 +102,16 @@ def _get_extension(filename: str) -> str:
 #  converts raw bytes into the most readable unit automatically.
 # ─────────────────────────────────────────────────────────────
 
+
 def _format_size(size_bytes: int) -> str:
-    """ Convert bytes to a human-readable string like '4.2 MB' or '850 KB'."""
+    """Convert bytes to a human-readable string like '4.2 MB' or '850 KB'."""
     if size_bytes >= 1024 * 1024:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
     elif size_bytes >= 1024:
         return f"{size_bytes / 1024:.1f} KB"
     else:
         return f"{size_bytes} bytes"
+
 
 # ─────────────────────────────────────────────────────────────
 #  validate_file()  — MAIN PUBLIC FUNCTION
@@ -128,21 +135,22 @@ def _format_size(size_bytes: int) -> str:
 #  the validator resilient to Gradio version changes.
 # ─────────────────────────────────────────────────────────────
 
+
 def validate_file(file: object) -> ValidationResult:
     """
     Run all validation checks on an uploaded file.
- 
+
     This is the ONLY function you need to call from outside this module.
     It runs checks in order and returns immediately on the first failure.
- 
+
     Args:
         file: The file object passed by Gradio's gr.File component.
               Has a .name attribute containing the temp file path.
- 
+
     Returns:
         ValidationResult with is_valid=True if all checks pass,
         or is_valid=False with a descriptive message if any check fails.
- 
+
     Usage:
         result = validate_file(file)
         if not result.is_valid:
@@ -157,7 +165,7 @@ def validate_file(file: object) -> ValidationResult:
     if file is None:
         return ValidationResult(
             is_valid=False,
-            message="⚠️ No file uploaded. Please upload a PDF or DOCX report."
+            message="⚠️ No file uploaded. Please upload a PDF or DOCX report.",
         )
 
     # ── Extract file path safely ──────────────────────────────
@@ -183,7 +191,7 @@ def validate_file(file: object) -> ValidationResult:
                 f"Please upload one of: {allowed}"
             ),
             file_name=file_name,
-            extension=extension
+            extension=extension,
         )
 
     # ── Check 3: Size ────────────────────────────────────────
@@ -203,7 +211,7 @@ def validate_file(file: object) -> ValidationResult:
             is_valid=False,
             message="❌ The uploaded file appears to be empty. Please upload a valid report.",
             file_name=file_name,
-            extension=extension
+            extension=extension,
         )
 
     if file_size > config.MAX_FILE_SIZE_BYTES:
@@ -215,7 +223,7 @@ def validate_file(file: object) -> ValidationResult:
             ),
             file_name=file_name,
             extension=extension,
-            file_size=file_size
+            file_size=file_size,
         )
 
     # ── Check 4: Readability ─────────────────────────────────
@@ -235,7 +243,7 @@ def validate_file(file: object) -> ValidationResult:
             message=f"❌ Cannot read the uploaded file. It may be corrupted. ({e})",
             file_name=file_name,
             extension=extension,
-            file_size=file_size
+            file_size=file_size,
         )
 
     # ── All checks passed ─────────────────────────────────────
@@ -251,6 +259,5 @@ def validate_file(file: object) -> ValidationResult:
         metadata={
             "file_path": file_path,
             "size_formatted": _format_size(file_size),
-        }
+        },
     )
-

@@ -47,28 +47,40 @@ print("═" * 65)
 print("\n[1/6] Verifying Week 2 imports...")
 
 try:
-    from utils.validator  import validate_file, ValidationResult
+    from utils.validator import validate_file, ValidationResult
+
     print("   ✅ utils.validator    — validate_file, ValidationResult")
 except ImportError as e:
     print(f"   ❌ utils.validator failed: {e}")
     sys.exit(1)
 
 try:
-    from utils.sanitizer  import sanitize, is_meaningful, chunk_text, get_text_stats
-    print("   ✅ utils.sanitizer    — sanitize, is_meaningful, chunk_text, get_text_stats")
+    from utils.sanitizer import sanitize, is_meaningful, chunk_text, get_text_stats
+
+    print(
+        "   ✅ utils.sanitizer    — sanitize, is_meaningful, chunk_text, get_text_stats"
+    )
 except ImportError as e:
     print(f"   ❌ utils.sanitizer failed: {e}")
     sys.exit(1)
 
 try:
-    from tools.document_parser import parse_document, ParsedDocument, format_parsed_for_display
-    print("   ✅ tools.document_parser — parse_document, ParsedDocument, format_parsed_for_display")
+    from tools.document_parser import (
+        parse_document,
+        ParsedDocument,
+        format_parsed_for_display,
+    )
+
+    print(
+        "   ✅ tools.document_parser — parse_document, ParsedDocument, format_parsed_for_display"
+    )
 except ImportError as e:
     print(f"   ❌ tools.document_parser failed: {e}")
     sys.exit(1)
 
 try:
-    import fitz   # PyMuPDF
+    import fitz  # PyMuPDF
+
     print("   ✅ fitz (PyMuPDF)     — PDF extraction library")
 except ImportError:
     print("   ❌ fitz (PyMuPDF) not installed — run: pip install pymupdf")
@@ -76,6 +88,7 @@ except ImportError:
 
 try:
     from docx import Document
+
     print("   ✅ docx (python-docx) — DOCX extraction library")
 except ImportError:
     print("   ❌ python-docx not installed — run: pip install python-docx")
@@ -91,11 +104,13 @@ except ImportError:
 
 print("\n[2/6] Testing validator.py...")
 
+
 # Simulate Gradio's file object — it has a .name attribute
 # that points to the file path on disk
 class FakeFile:
     def __init__(self, name: str):
         self.name = name
+
 
 # Test 2a: None input (no file uploaded)
 result = validate_file(None)
@@ -146,6 +161,7 @@ print("\n[3/6] Testing sanitizer.py...")
 # This prevents old cached .pyc files from causing unexpected behaviour
 import importlib
 import utils.sanitizer as _san_module
+
 importlib.reload(_san_module)
 from utils.sanitizer import sanitize, is_meaningful, chunk_text, get_text_stats
 
@@ -210,9 +226,9 @@ print(f"   ✅ Long text → {len(chunks)} chunks, all within size limit")
 
 # Test 3h: get_text_stats() returns correct structure
 stats = get_text_stats("Hello world. This is a test sentence with ten words here.")
-assert "word_count"    in stats, "Missing word_count in stats"
-assert "char_count"    in stats, "Missing char_count in stats"
-assert "chunk_count"   in stats, "Missing chunk_count in stats"
+assert "word_count" in stats, "Missing word_count in stats"
+assert "char_count" in stats, "Missing char_count in stats"
+assert "chunk_count" in stats, "Missing chunk_count in stats"
 assert "is_meaningful" in stats, "Missing is_meaningful in stats"
 print("   ✅ get_text_stats() returns all expected keys")
 
@@ -286,15 +302,15 @@ with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
 try:
     # Use PyMuPDF to create a real PDF with our synthetic content
     # This is the same library we use for reading PDFs
-    pdf_doc = fitz.open()                     # create empty PDF
-    page = pdf_doc.new_page()                  # add one page
-    page.insert_text(                          # insert our text
-        point=(50, 50),                        # starting position (x, y)
+    pdf_doc = fitz.open()  # create empty PDF
+    page = pdf_doc.new_page()  # add one page
+    page.insert_text(  # insert our text
+        point=(50, 50),  # starting position (x, y)
         text=SYNTHETIC_PDF_CONTENT,
         fontsize=10,
-        fontname="helv",                       # Helvetica — standard PDF font
+        fontname="helv",  # Helvetica — standard PDF font
     )
-    pdf_doc.save(pdf_test_path)               # save to disk
+    pdf_doc.save(pdf_test_path)  # save to disk
     pdf_doc.close()
 
     # Now test parse_document() with the fake Gradio file object
@@ -302,28 +318,31 @@ try:
     parsed = parse_document(fake_file)
 
     # Assertions
-    assert parsed.success,      f"PDF parsing failed: {parsed.error}"
+    assert parsed.success, f"PDF parsing failed: {parsed.error}"
     assert parsed.extension == "pdf", f"Extension wrong: {parsed.extension}"
-    assert parsed.page_count == 1,    f"Expected 1 page, got {parsed.page_count}"
-    assert parsed.word_count > 50,    f"Too few words extracted: {parsed.word_count}"
-    assert parsed.char_count > 200,   f"Too few chars extracted: {parsed.char_count}"
-    assert parsed.is_meaningful,      "Parsed text should be meaningful"
-    assert "Hemoglobin" in parsed.text or "hemoglobin" in parsed.text.lower(), \
-        "Key medical term 'Hemoglobin' not found in extracted text"
+    assert parsed.page_count == 1, f"Expected 1 page, got {parsed.page_count}"
+    assert parsed.word_count > 50, f"Too few words extracted: {parsed.word_count}"
+    assert parsed.char_count > 200, f"Too few chars extracted: {parsed.char_count}"
+    assert parsed.is_meaningful, "Parsed text should be meaningful"
+    assert (
+        "Hemoglobin" in parsed.text or "hemoglobin" in parsed.text.lower()
+    ), "Key medical term 'Hemoglobin' not found in extracted text"
 
-    print(f"   ✅ PDF parsed successfully")
+    print("   ✅ PDF parsed successfully")
     print(f"   ✅ Words extracted : {parsed.word_count:,}")
     print(f"   ✅ Characters      : {parsed.char_count:,}")
     print(f"   ✅ Pages           : {parsed.page_count}")
     print(f"   ✅ LLM chunks      : {parsed.chunk_count}")
     print(f"   ✅ Is meaningful   : {parsed.is_meaningful}")
-    print(f"   ✅ Key term check  : 'Hemoglobin' found in extracted text")
+    print("   ✅ Key term check  : 'Hemoglobin' found in extracted text")
 
     # Test the display formatter
     display_md = format_parsed_for_display(parsed)
-    assert "## 📄 Extracted Raw Text" in display_md, "Display formatter output malformed"
+    assert (
+        "## 📄 Extracted Raw Text" in display_md
+    ), "Display formatter output malformed"
     assert parsed.file_name in display_md, "Filename missing from display output"
-    print(f"   ✅ format_parsed_for_display() output is well-formed")
+    print("   ✅ format_parsed_for_display() output is well-formed")
 
 finally:
     os.unlink(pdf_test_path)
@@ -345,7 +364,6 @@ finally:
 print("\n[5/6] Testing DOCX parsing with synthetic medical document...")
 
 from docx import Document
-from docx.shared import Pt
 
 with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
     docx_test_path = tmp.name
@@ -377,11 +395,11 @@ try:
 
     # Data rows
     lab_data = [
-        ("Hemoglobin",     "11.2 g/dL",   "12.0-17.5 g/dL",    "LOW"),
-        ("WBC Count",      "7400 /uL",    "4000-11000 /uL",     "Normal"),
-        ("Platelet Count", "210000 /uL",  "150000-400000 /uL",  "Normal"),
-        ("LDL Cholesterol","142 mg/dL",   "<100 mg/dL",         "HIGH"),
-        ("Fasting Glucose","118 mg/dL",   "70-99 mg/dL",        "BORDERLINE"),
+        ("Hemoglobin", "11.2 g/dL", "12.0-17.5 g/dL", "LOW"),
+        ("WBC Count", "7400 /uL", "4000-11000 /uL", "Normal"),
+        ("Platelet Count", "210000 /uL", "150000-400000 /uL", "Normal"),
+        ("LDL Cholesterol", "142 mg/dL", "<100 mg/dL", "HIGH"),
+        ("Fasting Glucose", "118 mg/dL", "70-99 mg/dL", "BORDERLINE"),
     ]
 
     for test, result, ref_range, flag in lab_data:
@@ -406,22 +424,24 @@ try:
     fake_file = FakeFile(docx_test_path)
     parsed = parse_document(fake_file)
 
-    assert parsed.success,         f"DOCX parsing failed: {parsed.error}"
+    assert parsed.success, f"DOCX parsing failed: {parsed.error}"
     assert parsed.extension == "docx", f"Extension wrong: {parsed.extension}"
-    assert parsed.word_count > 30,  f"Too few words extracted: {parsed.word_count}"
-    assert parsed.is_meaningful,    "Parsed DOCX text should be meaningful"
+    assert parsed.word_count > 30, f"Too few words extracted: {parsed.word_count}"
+    assert parsed.is_meaningful, "Parsed DOCX text should be meaningful"
 
     # CRITICAL: verify table content was extracted
-    assert "Hemoglobin" in parsed.text, "Table content 'Hemoglobin' not extracted from DOCX"
-    assert "11.2" in parsed.text,       "Table value '11.2' not extracted from DOCX"
-    assert "LOW" in parsed.text,        "Table flag 'LOW' not extracted from DOCX"
+    assert (
+        "Hemoglobin" in parsed.text
+    ), "Table content 'Hemoglobin' not extracted from DOCX"
+    assert "11.2" in parsed.text, "Table value '11.2' not extracted from DOCX"
+    assert "LOW" in parsed.text, "Table flag 'LOW' not extracted from DOCX"
 
-    print(f"   ✅ DOCX parsed successfully")
+    print("   ✅ DOCX parsed successfully")
     print(f"   ✅ Words extracted  : {parsed.word_count:,}")
     print(f"   ✅ Estimated pages  : {parsed.page_count}")
     print(f"   ✅ Is meaningful    : {parsed.is_meaningful}")
-    print(f"   ✅ Table extraction : 'Hemoglobin', '11.2', 'LOW' all found ✓")
-    print(f"   ✅ Pipe-separated table rows in extracted text")
+    print("   ✅ Table extraction : 'Hemoglobin', '11.2', 'LOW' all found ✓")
+    print("   ✅ Pipe-separated table rows in extracted text")
 
 finally:
     os.unlink(docx_test_path)
@@ -438,15 +458,19 @@ print("\n[6/6] Verifying app.py imports Week 2 correctly...")
 try:
     # We import just the functions we need to verify, not launch Gradio
     import importlib.util
+
     spec = importlib.util.spec_from_file_location("app", "app.py")
     # We can't fully execute app.py (it would launch Gradio)
     # but we CAN verify the tools import at the module level
     from tools.document_parser import parse_document, format_parsed_for_display
     import config
+
     print("   ✅ tools.document_parser imports cleanly into app.py context")
     print("   ✅ config module loads with MEDICAL_DISCLAIMER present")
-    assert hasattr(config, "MEDICAL_DISCLAIMER"), "MEDICAL_DISCLAIMER missing from config"
-    assert hasattr(config, "APP_VERSION"),        "APP_VERSION missing from config"
+    assert hasattr(
+        config, "MEDICAL_DISCLAIMER"
+    ), "MEDICAL_DISCLAIMER missing from config"
+    assert hasattr(config, "APP_VERSION"), "APP_VERSION missing from config"
     print("   ✅ config.MEDICAL_DISCLAIMER and config.APP_VERSION present")
 except Exception as e:
     print(f"   ❌ app.py context import failed: {e}")

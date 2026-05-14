@@ -31,30 +31,44 @@ print("\n[1/5] Verifying Week 4 imports...")
 
 try:
     from custom_data_types import (
-        ReportRecommendations, DietaryRecommendation,
-        LifestyleModification, FollowUpAction,
-        ReportFindings, PatientContext, LabValue, AbnormalFlag,
+        ReportRecommendations,
+        DietaryRecommendation,
+        LifestyleModification,
+        FollowUpAction,
+        ReportFindings,
+        PatientContext,
+        LabValue,
+        AbnormalFlag,
     )
+
     print("   ✅ custom_data_types — all Week 4 models")
 except ImportError as e:
-    print(f"   ❌ {e}"); sys.exit(1)
+    print(f"   ❌ {e}")
+    sys.exit(1)
 
 try:
     from prompts.recommendation_prompt import (
-        RECOMMENDATION_SYSTEM_PROMPT, build_recommendation_user_message
+        RECOMMENDATION_SYSTEM_PROMPT,
+        build_recommendation_user_message,
     )
+
     print("   ✅ prompts.recommendation_prompt")
 except ImportError as e:
-    print(f"   ❌ {e}"); sys.exit(1)
+    print(f"   ❌ {e}")
+    sys.exit(1)
 
 try:
     from tools.recommendation_generator import (
-        generate_recommendations, format_recommendations_for_display,
-        recommendation_agent, _format_findings_for_recommendation,
+        generate_recommendations,
+        format_recommendations_for_display,
+        recommendation_agent,
+        _format_findings_for_recommendation,
     )
+
     print("   ✅ tools.recommendation_generator")
 except ImportError as e:
-    print(f"   ❌ {e}"); sys.exit(1)
+    print(f"   ❌ {e}")
+    sys.exit(1)
 
 
 # ── Test 2: Pydantic model validation ────────────────────────
@@ -112,46 +126,93 @@ print("\n[3/5] Testing prompt builder and findings formatter...")
 test_findings = ReportFindings(
     report_type="lab_report",
     patient_context=PatientContext(
-        age="33 years", gender="Male",
+        age="33 years",
+        gender="Male",
         report_date="13/Feb/2025",
-        ordering_physician="Dr."
+        ordering_physician="Dr.",
     ),
     lab_values=[
-        LabValue(parameter="Hemoglobin", value="15.3 g/dL",
-                 reference_range="13.0-17.0", flag="Normal"),
-        LabValue(parameter="RDW-CV", value="15.7 %",
-                 reference_range="11.6-14", flag="High",
-                 clinical_note="Above reference range — red cell size variation"),
-        LabValue(parameter="MCHC", value="34.7 g/dL",
-                 reference_range="31.5-34.5", flag="High",
-                 clinical_note="Slightly above upper limit"),
-        LabValue(parameter="Uric Acid", value="8.5 mg/dL",
-                 reference_range="3.5-7.2", flag="High",
-                 clinical_note="Elevated — associated with gout risk"),
-        LabValue(parameter="Creatinine", value="1.33 mg/dL",
-                 reference_range="0.7-1.3", flag="High",
-                 clinical_note="Slightly above normal"),
-        LabValue(parameter="Cholesterol - LDL", value="131 mg/dL",
-                 reference_range="<100 desirable; 130-159 borderline high",
-                 flag="Borderline",
-                 clinical_note="Borderline high — cardiovascular risk factor"),
-        LabValue(parameter="Immunoglobulin E (IgE)", value="228 IU/mL",
-                 reference_range="0-158", flag="High",
-                 clinical_note="Elevated — may indicate allergic response"),
-        LabValue(parameter="Vitamin D (25-OH)", value="31.7 ng/ml",
-                 reference_range="30-100 Sufficient", flag="Normal"),
+        LabValue(
+            parameter="Hemoglobin",
+            value="15.3 g/dL",
+            reference_range="13.0-17.0",
+            flag="Normal",
+        ),
+        LabValue(
+            parameter="RDW-CV",
+            value="15.7 %",
+            reference_range="11.6-14",
+            flag="High",
+            clinical_note="Above reference range — red cell size variation",
+        ),
+        LabValue(
+            parameter="MCHC",
+            value="34.7 g/dL",
+            reference_range="31.5-34.5",
+            flag="High",
+            clinical_note="Slightly above upper limit",
+        ),
+        LabValue(
+            parameter="Uric Acid",
+            value="8.5 mg/dL",
+            reference_range="3.5-7.2",
+            flag="High",
+            clinical_note="Elevated — associated with gout risk",
+        ),
+        LabValue(
+            parameter="Creatinine",
+            value="1.33 mg/dL",
+            reference_range="0.7-1.3",
+            flag="High",
+            clinical_note="Slightly above normal",
+        ),
+        LabValue(
+            parameter="Cholesterol - LDL",
+            value="131 mg/dL",
+            reference_range="<100 desirable; 130-159 borderline high",
+            flag="Borderline",
+            clinical_note="Borderline high — cardiovascular risk factor",
+        ),
+        LabValue(
+            parameter="Immunoglobulin E (IgE)",
+            value="228 IU/mL",
+            reference_range="0-158",
+            flag="High",
+            clinical_note="Elevated — may indicate allergic response",
+        ),
+        LabValue(
+            parameter="Vitamin D (25-OH)",
+            value="31.7 ng/ml",
+            reference_range="30-100 Sufficient",
+            flag="Normal",
+        ),
     ],
     abnormal_flags=[
-        AbnormalFlag(finding="RDW-CV 15.7% above reference range 11.6-14%",
-                     severity="mild", category="hematology"),
-        AbnormalFlag(finding="Uric Acid elevated at 8.5 mg/dL (ref: 3.5-7.2)",
-                     severity="moderate", category="metabolic"),
-        AbnormalFlag(finding="Creatinine slightly elevated at 1.33 mg/dL (ref: 0.7-1.3)",
-                     severity="mild", category="renal"),
-        AbnormalFlag(finding="LDL Cholesterol borderline high at 131 mg/dL",
-                     severity="moderate", category="lipid"),
-        AbnormalFlag(finding="IgE Total elevated at 228 IU/mL (ref: 0-158)",
-                     severity="mild", category="general"),
+        AbnormalFlag(
+            finding="RDW-CV 15.7% above reference range 11.6-14%",
+            severity="mild",
+            category="hematology",
+        ),
+        AbnormalFlag(
+            finding="Uric Acid elevated at 8.5 mg/dL (ref: 3.5-7.2)",
+            severity="moderate",
+            category="metabolic",
+        ),
+        AbnormalFlag(
+            finding="Creatinine slightly elevated at 1.33 mg/dL (ref: 0.7-1.3)",
+            severity="mild",
+            category="renal",
+        ),
+        AbnormalFlag(
+            finding="LDL Cholesterol borderline high at 131 mg/dL",
+            severity="moderate",
+            category="lipid",
+        ),
+        AbnormalFlag(
+            finding="IgE Total elevated at 228 IU/mL (ref: 0-158)",
+            severity="mild",
+            category="general",
+        ),
     ],
     clinical_summary=(
         "This comprehensive lab report for a 33-year-old male shows mostly normal "
@@ -169,7 +230,7 @@ assert "ABNORMAL FINDINGS" in summary, "Abnormal section missing"
 assert "33 years" in summary, "Patient age missing"
 assert "Male" in summary, "Patient gender missing"
 print(f"   ✅ _format_findings_for_recommendation() — {len(summary)} chars")
-print(f"   ✅ All key findings present in summary")
+print("   ✅ All key findings present in summary")
 
 # Test prompt builder
 msg = build_recommendation_user_message(
@@ -180,7 +241,7 @@ msg = build_recommendation_user_message(
 assert "Patient Age: 33 years" in msg
 assert "REPORT FINDINGS BEGIN" in msg
 assert "REPORT FINDINGS END" in msg
-print(f"   ✅ build_recommendation_user_message() — well-formed")
+print("   ✅ build_recommendation_user_message() — well-formed")
 
 
 # ── Test 4: Real LLM call ────────────────────────────────────
@@ -189,36 +250,48 @@ print("\n[4/5] Testing real LLM call (GitHub Models)...")
 print("      Generating recommendations for synthetic TATA 1mg findings...")
 print("      Please wait — this may take 15-30 seconds...")
 
+
 async def test_real_llm():
     recs = await generate_recommendations(test_findings)
 
-    assert isinstance(recs, ReportRecommendations), \
-        f"Expected ReportRecommendations, got {type(recs)}"
+    assert isinstance(
+        recs, ReportRecommendations
+    ), f"Expected ReportRecommendations, got {type(recs)}"
     print("   ✅ Returns valid ReportRecommendations object")
 
-    assert len(recs.dietary_recommendations) >= 1, \
-        "Expected at least 1 dietary recommendation for elevated uric acid + LDL"
-    print(f"   ✅ dietary_recommendations: {len(recs.dietary_recommendations)} generated")
+    assert (
+        len(recs.dietary_recommendations) >= 1
+    ), "Expected at least 1 dietary recommendation for elevated uric acid + LDL"
+    print(
+        f"   ✅ dietary_recommendations: {len(recs.dietary_recommendations)} generated"
+    )
 
-    assert len(recs.lifestyle_modifications) >= 1, \
-        "Expected at least 1 lifestyle modification"
-    print(f"   ✅ lifestyle_modifications: {len(recs.lifestyle_modifications)} generated")
+    assert (
+        len(recs.lifestyle_modifications) >= 1
+    ), "Expected at least 1 lifestyle modification"
+    print(
+        f"   ✅ lifestyle_modifications: {len(recs.lifestyle_modifications)} generated"
+    )
 
-    assert len(recs.follow_up_actions) >= 1, \
-        "Expected at least 1 follow-up action"
+    assert len(recs.follow_up_actions) >= 1, "Expected at least 1 follow-up action"
     print(f"   ✅ follow_up_actions: {len(recs.follow_up_actions)} generated")
 
-    assert recs.overall_urgency in ("routine", "consult_soon", "urgent", "seek_immediate_care"), \
-        f"Invalid urgency: {recs.overall_urgency}"
+    assert recs.overall_urgency in (
+        "routine",
+        "consult_soon",
+        "urgent",
+        "seek_immediate_care",
+    ), f"Invalid urgency: {recs.overall_urgency}"
     print(f"   ✅ overall_urgency: '{recs.overall_urgency}'")
 
     assert len(recs.overall_assessment) > 50, "Assessment too short"
     print(f"   ✅ overall_assessment: {len(recs.overall_assessment)} chars")
 
     assert "AI system" in recs.disclaimer
-    print(f"   ✅ disclaimer: present")
+    print("   ✅ disclaimer: present")
 
     return recs
+
 
 recs_result = asyncio.run(test_real_llm())
 print("   ✅ Real LLM call passed all assertions")
@@ -260,7 +333,9 @@ print("  What's working now:")
 print("  ✅ custom_data_types.py     — DietaryRecommendation, LifestyleModification,")
 print("                               FollowUpAction, ReportRecommendations")
 print("  ✅ prompts/recommendation_prompt.py — system prompt + user message builder")
-print("  ✅ tools/recommendation_generator.py — Agent + Runner.run() + display formatter")
+print(
+    "  ✅ tools/recommendation_generator.py — Agent + Runner.run() + display formatter"
+)
 print("  ✅ app.py                   — Recommendations tab wired to real Agent")
 print()
 print("  Live results from the LLM:")

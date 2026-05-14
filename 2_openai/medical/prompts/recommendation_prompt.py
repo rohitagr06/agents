@@ -1,16 +1,16 @@
 """
 prompts/recommendation_prompt.py — System Prompt for Recommendation Agent
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 
+
 PURPOSE:
     System prompt for the recommendation_agent — the second LLM call
     in the MediScan AI pipeline.
- 
+
     WHAT THIS AGENT RECEIVES (input):
         A structured JSON summary of ReportFindings — all lab values,
         abnormal flags, patient context (age, gender), and the clinical
         summary produced by the analyzer agent.
- 
+
     WHAT THIS AGENT PRODUCES (output):
         A ReportRecommendations object with:
         — Dietary recommendations linked to specific findings
@@ -18,26 +18,26 @@ PURPOSE:
         — Follow-up actions with timeframes and urgency levels
         — Overall urgency assessment across all findings
         — Plain-language overall assessment
- 
+
 KEY DESIGN PRINCIPLES:
- 
+
     1. GROUNDED ADVICE ONLY
        Every recommendation must be directly linked to a specific finding
        in the report. Generic wellness advice ("eat vegetables", "exercise
        regularly") is explicitly forbidden. If a finding is normal, there
        is no recommendation for it.
- 
+
     2. PATIENT-CONTEXT AWARE
        The agent uses age and gender to personalize advice. LDL of 131
        means different things for a 25-year-old vs a 55-year-old. Male
        vs female reference ranges differ for hemoglobin, HDL, etc.
- 
+
     3. SAFE LANGUAGE BOUNDARIES
        The agent can say "your LDL is in the borderline-high range and
        dietary changes may help reduce it" but NEVER "you have
        cardiovascular disease" or "take atorvastatin". No diagnoses,
        no prescriptions, no dosage advice.
- 
+
     4. TEMPERATURE = 0.3
        Slightly higher than the analyzer (0.1) because recommendations
        benefit from slightly more natural, warm language — but still low
@@ -147,29 +147,37 @@ Never add fields not in the schema.
 Never wrap your response in markdown code fences.
 """
 
+
 def build_recommendation_user_message(
     findings_summary: str,
     patient_age: str | None = None,
-    patient_gender: str | None = None,) -> str:
+    patient_gender: str | None = None,
+) -> str:
     """
     Build the user message for the recommendation agent.
- 
+
     WHY A FUNCTION?
     The user message includes a formatted summary of findings plus
     patient context. Wrapping this in a function ensures consistent
     formatting and makes it easy to modify without touching agent code.
- 
+
     Args:
         findings_summary: JSON or structured text summary of ReportFindings
         patient_age:      Patient age string from PatientContext (may be None)
         patient_gender:   Patient gender string from PatientContext (may be None)
- 
+
     Returns:
         Formatted user message string for Runner.run()
     """
-    age_info = f"Patient Age: {patient_age}" if patient_age else "Patient Age: Not specified"
-    gender_info = f"Patient Gender: {patient_gender}" if patient_gender else "Patient Gender: Not specified"
- 
+    age_info = (
+        f"Patient Age: {patient_age}" if patient_age else "Patient Age: Not specified"
+    )
+    gender_info = (
+        f"Patient Gender: {patient_gender}"
+        if patient_gender
+        else "Patient Gender: Not specified"
+    )
+
     return (
         f"Please generate personalized health recommendations based on the "
         f"following medical report findings.\n\n"

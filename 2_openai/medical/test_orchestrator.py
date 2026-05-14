@@ -32,8 +32,7 @@ import asyncio
 import os
 import sys
 import time
-import tempfile
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 print("\n" + "═" * 65)
 print("  MediScan AI — Week 5 Orchestrator Test")
@@ -59,6 +58,7 @@ try:
         _compute_file_hash,
         _build_summary_md,
     )
+
     print("   ✅ pipeline.orchestrator — all exports")
 except ImportError as e:
     print(f"   ❌ pipeline.orchestrator: {e}")
@@ -66,6 +66,7 @@ except ImportError as e:
 
 try:
     from output.pdf_builder import generate_pdf
+
     print("   ✅ output.pdf_builder — generate_pdf")
 except ImportError as e:
     print(f"   ❌ output.pdf_builder: {e}")
@@ -73,11 +74,16 @@ except ImportError as e:
 
 try:
     from custom_data_types import (
-        ReportFindings, ReportRecommendations,
-        PatientContext, LabValue, AbnormalFlag,
-        DietaryRecommendation, LifestyleModification,
+        ReportFindings,
+        ReportRecommendations,
+        PatientContext,
+        LabValue,
+        AbnormalFlag,
+        DietaryRecommendation,
+        LifestyleModification,
         FollowUpAction,
     )
+
     print("   ✅ custom_data_types — all models")
 except ImportError as e:
     print(f"   ❌ custom_data_types: {e}")
@@ -87,6 +93,7 @@ try:
     from tools.document_parser import ParsedDocument
     from tools.report_analyzer import format_findings_for_display
     from tools.recommendation_generator import format_recommendations_for_display
+
     print("   ✅ tools — all formatters")
 except ImportError as e:
     print(f"   ❌ tools: {e}")
@@ -100,9 +107,9 @@ except ImportError as e:
 print("\n[2/10] Testing SessionState and rate limit logic...")
 
 state = SessionState()
-assert state.analyses_used == 0,       "analyses_used should start at 0"
-assert state.last_analysis_time == 0.0,"last_analysis_time should start at 0.0"
-assert state.cache == {},              "cache should start empty"
+assert state.analyses_used == 0, "analyses_used should start at 0"
+assert state.last_analysis_time == 0.0, "last_analysis_time should start at 0.0"
+assert state.cache == {}, "cache should start empty"
 print("   ✅ SessionState initialises with correct defaults")
 
 # Fresh session — should be allowed
@@ -114,7 +121,9 @@ print("   ✅ Fresh session passes rate limit check")
 state.last_analysis_time = time.time()
 allowed, msg = _check_rate_limit(state)
 assert not allowed, "Should be blocked during cooldown"
-assert "wait" in msg.lower() or "seconds" in msg.lower(), f"Message should mention wait time: {msg}"
+assert (
+    "wait" in msg.lower() or "seconds" in msg.lower()
+), f"Message should mention wait time: {msg}"
 print(f"   ✅ Cooldown enforced: '{msg[:60]}...'")
 
 # Simulate cooldown expired
@@ -131,8 +140,10 @@ assert "session" in msg.lower(), f"Message should mention session: {msg}"
 print(f"   ✅ Session cap enforced at {MAX_ANALYSES_PER_SESSION}: '{msg[:60]}...'")
 
 assert MAX_ANALYSES_PER_SESSION == 2, f"Expected 2, got {MAX_ANALYSES_PER_SESSION}"
-assert COOLDOWN_SECONDS == 60,        f"Expected 60s, got {COOLDOWN_SECONDS}"
-print(f"   ✅ Constants correct: {MAX_ANALYSES_PER_SESSION} analyses, {COOLDOWN_SECONDS}s cooldown")
+assert COOLDOWN_SECONDS == 60, f"Expected 60s, got {COOLDOWN_SECONDS}"
+print(
+    f"   ✅ Constants correct: {MAX_ANALYSES_PER_SESSION} analyses, {COOLDOWN_SECONDS}s cooldown"
+)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -142,16 +153,16 @@ print(f"   ✅ Constants correct: {MAX_ANALYSES_PER_SESSION} analyses, {COOLDOWN
 print("\n[3/10] Testing AnalysisResult dataclass...")
 
 result = AnalysisResult()
-assert result.success         == True,  "Default success should be True"
-assert result.findings_md     == "",    "Default findings_md should be empty"
+assert result.success == True, "Default success should be True"
+assert result.findings_md == "", "Default findings_md should be empty"
 assert result.recommendations_md == "", "Default recommendations_md should be empty"
-assert result.summary_md      == "",    "Default summary_md should be empty"
-assert result.raw_md          == "",    "Default raw_md should be empty"
-assert result.status          == "",    "Default status should be empty"
-assert result.elapsed_seconds == 0.0,  "Default elapsed should be 0.0"
-assert result.from_cache      == False, "Default from_cache should be False"
-assert result.findings        is None,  "Default findings object should be None"
-assert result.recommendations is None,  "Default recommendations object should be None"
+assert result.summary_md == "", "Default summary_md should be empty"
+assert result.raw_md == "", "Default raw_md should be empty"
+assert result.status == "", "Default status should be empty"
+assert result.elapsed_seconds == 0.0, "Default elapsed should be 0.0"
+assert result.from_cache == False, "Default from_cache should be False"
+assert result.findings is None, "Default findings object should be None"
+assert result.recommendations is None, "Default recommendations object should be None"
 print("   ✅ AnalysisResult default fields all correct")
 
 error_result = AnalysisResult(success=False, status="Test error", error="Test error")
@@ -168,7 +179,7 @@ print("\n[4/10] Testing _build_summary_md() — 3-section executive summary...")
 
 # Build minimal mock objects
 mock_parsed = MagicMock()
-mock_parsed.file_name  = "test_report.pdf"
+mock_parsed.file_name = "test_report.pdf"
 mock_parsed.word_count = 1200
 mock_parsed.page_count = 4
 mock_parsed.chunk_count = 1
@@ -182,17 +193,31 @@ mock_findings = ReportFindings(
         report_date="01/Jan/2025",
     ),
     lab_values=[
-        LabValue(parameter="Hemoglobin", value="11.2 g/dL",
-                 reference_range="13.0-17.0", flag="Low",
-                 clinical_note="Below reference range"),
-        LabValue(parameter="Glucose", value="118 mg/dL",
-                 reference_range="70-99 mg/dL", flag="High"),
+        LabValue(
+            parameter="Hemoglobin",
+            value="11.2 g/dL",
+            reference_range="13.0-17.0",
+            flag="Low",
+            clinical_note="Below reference range",
+        ),
+        LabValue(
+            parameter="Glucose",
+            value="118 mg/dL",
+            reference_range="70-99 mg/dL",
+            flag="High",
+        ),
     ],
     abnormal_flags=[
-        AbnormalFlag(finding="Hemoglobin low at 11.2 g/dL",
-                     severity="moderate", category="hematology"),
-        AbnormalFlag(finding="Glucose elevated at 118 mg/dL",
-                     severity="mild", category="metabolic"),
+        AbnormalFlag(
+            finding="Hemoglobin low at 11.2 g/dL",
+            severity="moderate",
+            category="hematology",
+        ),
+        AbnormalFlag(
+            finding="Glucose elevated at 118 mg/dL",
+            severity="mild",
+            category="metabolic",
+        ),
     ],
     clinical_summary=(
         "This lab report for a 35-year-old male shows hemoglobin below "
@@ -249,24 +274,27 @@ summary = _build_summary_md(mock_parsed, mock_findings, mock_recs)
 #   Section 1 → "Clinical Overview"
 #   Section 2 → "Health Advisor's Assessment"
 #   Section 3 → "Overall Urgency" or "At a Glance"
-assert "Clinical Overview" in summary or "Key Findings" in summary or "Findings" in summary, \
-    f"Section 1 (Clinical Overview) missing. Got:\n{summary[:300]}"
-assert "Assessment" in summary or "Recommendations" in summary or "Advisor" in summary, \
-    f"Section 2 (Assessment/Recommendations) missing. Got:\n{summary[:300]}"
-assert "Urgency" in summary or "Next Steps" in summary or "Glance" in summary, \
-    f"Section 3 (Urgency/Next Steps) missing. Got:\n{summary[:300]}"
+assert (
+    "Clinical Overview" in summary or "Key Findings" in summary or "Findings" in summary
+), f"Section 1 (Clinical Overview) missing. Got:\n{summary[:300]}"
+assert (
+    "Assessment" in summary or "Recommendations" in summary or "Advisor" in summary
+), f"Section 2 (Assessment/Recommendations) missing. Got:\n{summary[:300]}"
+assert (
+    "Urgency" in summary or "Next Steps" in summary or "Glance" in summary
+), f"Section 3 (Urgency/Next Steps) missing. Got:\n{summary[:300]}"
 
-assert "11.2" in summary or "Hemoglobin" in summary, \
-    "Abnormal finding not in summary"
-assert "consult" in summary.lower() or "soon" in summary.lower(), \
-    "Urgency level not reflected in summary"
+assert "11.2" in summary or "Hemoglobin" in summary, "Abnormal finding not in summary"
+assert (
+    "consult" in summary.lower() or "soon" in summary.lower()
+), "Urgency level not reflected in summary"
 assert len(summary) > 300, f"Summary too short: {len(summary)} chars"
 
 print(f"   ✅ _build_summary_md() — {len(summary):,} chars")
-print(f"   ✅ Section 1 (Key Findings) present")
-print(f"   ✅ Section 2 (Recommendations Overview) present")
-print(f"   ✅ Section 3 (Urgency & Next Steps) present")
-print(f"   ✅ Abnormal findings reflected in summary")
+print("   ✅ Section 1 (Key Findings) present")
+print("   ✅ Section 2 (Recommendations Overview) present")
+print("   ✅ Section 3 (Urgency & Next Steps) present")
+print("   ✅ Abnormal findings reflected in summary")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -293,6 +321,7 @@ else:
 
 pipeline_result = None
 
+
 async def test_full_pipeline():
     global pipeline_result
 
@@ -301,18 +330,18 @@ async def test_full_pipeline():
         return
 
     orchestrator = MediScanOrchestrator()
-    state        = SessionState()
+    state = SessionState()
 
     # Create a mock file object that points to the real PDF
-    mock_file      = MagicMock()
+    mock_file = MagicMock()
     mock_file.name = os.path.abspath(SAMPLE_PDF)
 
     print(f"   Running pipeline on: {SAMPLE_PDF}")
     print("   Please wait — this takes 20-40 seconds...")
 
     status_messages = []
-    result          = None
-    updated_state   = state
+    result = None
+    updated_state = state
 
     async for update in orchestrator.run(mock_file, state):
         if isinstance(update, str):
@@ -325,36 +354,41 @@ async def test_full_pipeline():
 
     assert result is not None, "Pipeline yielded no AnalysisResult"
     assert result.success, f"Pipeline failed: {result.error}"
-    assert len(result.findings_md) > 100,        "findings_md too short"
+    assert len(result.findings_md) > 100, "findings_md too short"
     assert len(result.recommendations_md) > 100, "recommendations_md too short"
-    assert len(result.summary_md) > 100,         "summary_md too short"
-    assert len(result.raw_md) > 50,              "raw_md too short"
-    assert result.elapsed_seconds > 0,           "elapsed_seconds should be > 0"
-    assert result.findings is not None,          "findings object should be stored"
-    assert result.recommendations is not None,   "recommendations object should be stored"
-    assert result.from_cache == False,           "First run should not be cached"
-    assert updated_state.analyses_used == 1,     "analyses_used should be 1"
+    assert len(result.summary_md) > 100, "summary_md too short"
+    assert len(result.raw_md) > 50, "raw_md too short"
+    assert result.elapsed_seconds > 0, "elapsed_seconds should be > 0"
+    assert result.findings is not None, "findings object should be stored"
+    assert result.recommendations is not None, "recommendations object should be stored"
+    assert result.from_cache == False, "First run should not be cached"
+    assert updated_state.analyses_used == 1, "analyses_used should be 1"
     assert updated_state.last_analysis_time > 0, "last_analysis_time should be set"
 
     # Validate step messages were emitted
-    assert any("Parsing" in m or "parsed" in m.lower() for m in status_messages), \
-        "No parse status message"
-    assert any("Analyz" in m for m in status_messages), \
-        "No analyze status message"
-    assert any("Recommend" in m for m in status_messages), \
-        "No recommendations status message"
-    assert any("summary" in m.lower() or "Summary" in m for m in status_messages), \
-        "No summary status message"
+    assert any(
+        "Parsing" in m or "parsed" in m.lower() for m in status_messages
+    ), "No parse status message"
+    assert any("Analyz" in m for m in status_messages), "No analyze status message"
+    assert any(
+        "Recommend" in m for m in status_messages
+    ), "No recommendations status message"
+    assert any(
+        "summary" in m.lower() or "Summary" in m for m in status_messages
+    ), "No summary status message"
 
     print(f"   ✅ Pipeline complete in {result.elapsed_seconds:.1f}s")
     print(f"   ✅ {len(result.findings.lab_values)} lab values extracted")
     print(f"   ✅ {len(result.findings.abnormal_flags)} abnormal flags")
-    print(f"   ✅ {len(result.recommendations.dietary_recommendations)} dietary recommendations")
+    print(
+        f"   ✅ {len(result.recommendations.dietary_recommendations)} dietary recommendations"
+    )
     print(f"   ✅ urgency={result.recommendations.overall_urgency}")
     print(f"   ✅ analyses_used updated to {updated_state.analyses_used}")
     print(f"   ✅ {len(status_messages)} step messages streamed")
 
     pipeline_result = result
+
 
 asyncio.run(test_full_pipeline())
 
@@ -365,9 +399,10 @@ asyncio.run(test_full_pipeline())
 
 print("\n[6/10] Testing recoverable pipeline — parse failure...")
 
+
 async def test_parse_failure():
     orchestrator = MediScanOrchestrator()
-    state        = SessionState()
+    state = SessionState()
 
     # Pass None — should fail gracefully at validation
     result = None
@@ -375,15 +410,16 @@ async def test_parse_failure():
         if isinstance(update, AnalysisResult):
             result = update
 
-    assert result is not None,  "Should yield an AnalysisResult even on failure"
+    assert result is not None, "Should yield an AnalysisResult even on failure"
     assert result.success == False, "success should be False on parse failure"
-    assert result.error != "",   "error should be populated"
-    assert result.status != "",  "status should contain the error message"
+    assert result.error != "", "error should be populated"
+    assert result.status != "", "status should contain the error message"
     # UI outputs should be empty — nothing to show
     assert result.findings_md == "", "findings_md should be empty on failure"
     assert result.recommendations_md == "", "recommendations_md should be empty"
     print(f"   ✅ Parse failure handled: '{result.error[:60]}...'")
-    print(f"   ✅ success=False, empty markdown outputs")
+    print("   ✅ success=False, empty markdown outputs")
+
 
 asyncio.run(test_parse_failure())
 
@@ -393,6 +429,7 @@ asyncio.run(test_parse_failure())
 # ─────────────────────────────────────────────────────────────
 
 print("\n[7/10] Testing rate limit enforcement...")
+
 
 async def test_rate_limit():
     orchestrator = MediScanOrchestrator()
@@ -410,8 +447,9 @@ async def test_rate_limit():
 
     assert result is not None, "Should yield AnalysisResult"
     assert result.success == False, "Should be blocked by rate limit"
-    assert "session" in result.error.lower() or "analyses" in result.error.lower(), \
-        f"Error should mention session limit: {result.error}"
+    assert (
+        "session" in result.error.lower() or "analyses" in result.error.lower()
+    ), f"Error should mention session limit: {result.error}"
     print(f"   ✅ Session cap enforced: '{result.error[:60]}...'")
 
     # Simulate cooldown active
@@ -426,9 +464,11 @@ async def test_rate_limit():
 
     assert result2 is not None
     assert result2.success == False
-    assert "wait" in result2.error.lower() or "seconds" in result2.error.lower(), \
-        f"Error should mention cooldown: {result2.error}"
+    assert (
+        "wait" in result2.error.lower() or "seconds" in result2.error.lower()
+    ), f"Error should mention cooldown: {result2.error}"
     print(f"   ✅ Cooldown enforced: '{result2.error[:60]}...'")
+
 
 asyncio.run(test_rate_limit())
 
@@ -439,39 +479,42 @@ asyncio.run(test_rate_limit())
 
 print("\n[8/10] Testing session cache hit...")
 
+
 async def test_cache_hit():
     if SKIP_PDF_TESTS or pipeline_result is None:
         print("   ⏭️  Skipped (no pipeline result from Test 5)")
         return
 
     orchestrator = MediScanOrchestrator()
-    mock_file      = MagicMock()
+    mock_file = MagicMock()
     mock_file.name = os.path.abspath(SAMPLE_PDF)
 
     # Pre-populate cache with our test result
     file_hash = _compute_file_hash(mock_file)
-    state     = SessionState()
+    state = SessionState()
     if file_hash:
         state.cache[file_hash] = pipeline_result
 
     cache_result = None
-    t_start      = time.time()
+    t_start = time.time()
     async for update in orchestrator.run(mock_file, state):
         if isinstance(update, AnalysisResult):
             cache_result = update
     t_elapsed = time.time() - t_start
 
     assert cache_result is not None, "Should yield AnalysisResult"
-    assert cache_result.success,     "Cache result should be successful"
-    assert cache_result.from_cache,  "from_cache should be True"
-    assert "[Cached]" in cache_result.status or "Cached" in cache_result.status, \
-        f"Status should indicate cache: {cache_result.status}"
+    assert cache_result.success, "Cache result should be successful"
+    assert cache_result.from_cache, "from_cache should be True"
+    assert (
+        "[Cached]" in cache_result.status or "Cached" in cache_result.status
+    ), f"Status should indicate cache: {cache_result.status}"
     # Cache hit should be near-instant (< 2 seconds vs 20-40s for real LLM)
     assert t_elapsed < 2.0, f"Cache hit too slow: {t_elapsed:.2f}s (expected <2s)"
 
     print(f"   ✅ Cache hit in {t_elapsed:.2f}s (vs ~25s for live LLM)")
-    print(f"   ✅ from_cache=True")
+    print("   ✅ from_cache=True")
     print(f"   ✅ Status: '{cache_result.status[:60]}...'")
+
 
 asyncio.run(test_cache_hit())
 
@@ -481,6 +524,7 @@ asyncio.run(test_cache_hit())
 # ─────────────────────────────────────────────────────────────
 
 print("\n[9/10] Testing PDF generation from pipeline output...")
+
 
 async def test_pdf_generation():
     if SKIP_PDF_TESTS or pipeline_result is None:
@@ -494,10 +538,12 @@ async def test_pdf_generation():
             print(f"   ❌ PDF generation with mock data failed: {e}")
             return
     else:
-        assert pipeline_result.findings is not None, \
-            "Pipeline result must have findings object for PDF"
-        assert pipeline_result.recommendations is not None, \
-            "Pipeline result must have recommendations object for PDF"
+        assert (
+            pipeline_result.findings is not None
+        ), "Pipeline result must have findings object for PDF"
+        assert (
+            pipeline_result.recommendations is not None
+        ), "Pipeline result must have recommendations object for PDF"
 
         try:
             pdf_path = generate_pdf(
@@ -512,7 +558,7 @@ async def test_pdf_generation():
     assert os.path.exists(pdf_path), f"PDF file not found at: {pdf_path}"
 
     size_kb = os.path.getsize(pdf_path) / 1024
-    assert size_kb > 5,   f"PDF too small ({size_kb:.1f} KB) — likely empty"
+    assert size_kb > 5, f"PDF too small ({size_kb:.1f} KB) — likely empty"
     assert size_kb < 5000, f"PDF too large ({size_kb:.1f} KB) — something wrong"
 
     # Verify it's a real PDF by checking the magic bytes
@@ -522,11 +568,12 @@ async def test_pdf_generation():
 
     print(f"   ✅ PDF generated: {os.path.basename(pdf_path)}")
     print(f"   ✅ Size: {size_kb:.1f} KB")
-    print(f"   ✅ Valid PDF header confirmed (%PDF)")
+    print("   ✅ Valid PDF header confirmed (%PDF)")
 
     # Clean up
     os.unlink(pdf_path)
-    print(f"   ✅ Temp file cleaned up")
+    print("   ✅ Temp file cleaned up")
+
 
 asyncio.run(test_pdf_generation())
 
@@ -546,8 +593,9 @@ print(f"   ✅ format_findings_for_display() — {len(findings_md):,} chars")
 
 recs_md = format_recommendations_for_display(mock_recs)
 assert "## " in recs_md or "# " in recs_md, "No markdown headers in recommendations"
-assert "consult" in recs_md.lower() or "soon" in recs_md.lower(), \
-    "Urgency missing from recommendations"
+assert (
+    "consult" in recs_md.lower() or "soon" in recs_md.lower()
+), "Urgency missing from recommendations"
 assert len(recs_md) > 200, f"Recommendations markdown too short: {len(recs_md)}"
 print(f"   ✅ format_recommendations_for_display() — {len(recs_md):,} chars")
 
@@ -567,7 +615,7 @@ non_medical_findings = ReportFindings(
 )
 non_medical_md = format_findings_for_display(non_medical_findings)
 assert len(non_medical_md) > 0, "Non-medical result should still produce markdown"
-print(f"   ✅ Non-medical document handled gracefully")
+print("   ✅ Non-medical document handled gracefully")
 
 
 # ─────────────────────────────────────────────────────────────

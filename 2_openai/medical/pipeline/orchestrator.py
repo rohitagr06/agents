@@ -1,7 +1,7 @@
 """
 agents/orchestrator.py — Pipeline Orchestrator for MediScan AI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 
+
 PURPOSE:
     This is the central coordinator for the entire MediScan AI pipeline.
     It follows the exact same pattern as your Deep Research project's
@@ -9,7 +9,7 @@ PURPOSE:
     1. Runs each step in sequence
     2. Yields status updates so the Gradio UI can show progress
     3. Returns the final structured result
- 
+
 YOUR DEEP RESEARCH PATTERN (ResearchManager):
     async def run(self, query: str):
         yield "Searches planned, starting to search..."
@@ -17,7 +17,7 @@ YOUR DEEP RESEARCH PATTERN (ResearchManager):
         yield "Searches complete, writing report..."
         report = await self.write_report(query, search_results)
         yield report.markdown_report
- 
+
 MEDISCAN ORCHESTRATOR (same pattern):
     async def run(self, file):
         yield "📄 Parsing document..."
@@ -29,7 +29,7 @@ MEDISCAN ORCHESTRATOR (same pattern):
         yield "📋 Building summary..."
         summary = await self.summarize(findings, recommendations)
         yield result  ← AnalysisResult dataclass
- 
+
 WHY A SEPARATE ORCHESTRATOR FILE?
     app.py should only handle UI concerns — layout, events, rendering.
     All pipeline logic lives here. This means:
@@ -38,7 +38,7 @@ WHY A SEPARATE ORCHESTRATOR FILE?
     — Future RC2 features (OCR, conversational follow-up) are added
       here without touching the UI layer
     — The same orchestrator could power a CLI or API endpoint
- 
+
 GRADIO ASYNC STREAMING PATTERN:
     Gradio 4.x supports async generator functions natively.
     When analyze_report() in app.py uses `yield`, Gradio streams
@@ -47,16 +47,22 @@ GRADIO ASYNC STREAMING PATTERN:
     without the UI freezing during the 20-30 second analysis.
 """
 
-import asyncio
 import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from tools.document_parser import parse_document, ParsedDocument, format_parsed_for_display
+from tools.document_parser import (
+    parse_document,
+    ParsedDocument,
+    format_parsed_for_display,
+)
 from tools.report_analyzer import analyze_report_text, format_findings_for_display
-from tools.recommendation_generator import generate_recommendations, format_recommendations_for_display
+from tools.recommendation_generator import (
+    generate_recommendations,
+    format_recommendations_for_display,
+)
 from custom_data_types import ReportFindings, ReportRecommendations
 import config
 
@@ -65,9 +71,9 @@ logger = logging.getLogger("orchestrator")
 # ─────────────────────────────────────────────────────────────
 #  Rate Limiter Constants
 # ─────────────────────────────────────────────────────────────
- 
-MAX_ANALYSES_PER_SESSION: int = 2    # per your answer: 2 per session
-COOLDOWN_SECONDS:         int = 60   # 60s cooldown between analyses
+
+MAX_ANALYSES_PER_SESSION: int = 2  # per your answer: 2 per session
+COOLDOWN_SECONDS: int = 60  # 60s cooldown between analyses
 
 # ─────────────────────────────────────────────────────────────
 #  SessionState — per-session rate limit + cache
@@ -85,12 +91,15 @@ COOLDOWN_SECONDS:         int = 60   # 60s cooldown between analyses
 #  Scope: session-only — cleared on page refresh (privacy-safe for public app)
 # ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class SessionState:
     """Per-session state for rate limiting and result caching."""
-    analyses_used:      int = 0
+
+    analyses_used: int = 0
     last_analysis_time: float = 0.0
-    cache:              dict = field(default_factory=dict) # hash → AnalysisResult
+    cache: dict = field(default_factory=dict)  # hash → AnalysisResult
+
 
 def _compute_file_hash(file) -> str:
     """
@@ -104,10 +113,11 @@ def _compute_file_hash(file) -> str:
     except Exception:
         return ""
 
+
 def _check_rate_limit(state: SessionState) -> tuple[bool, str]:
     """
     Check whether this session can run another analysis.
- 
+
     Returns:
         (allowed: bool, message: str)
         If not allowed, message contains the reason + countdown.
@@ -124,13 +134,14 @@ def _check_rate_limit(state: SessionState) -> tuple[bool, str]:
                 f"This keeps the service available for everyone on the free tier."
             )
 
-     # ── Session cap check ─────────────────────────────────────
+    # ── Session cap check ─────────────────────────────────────
     if state.analyses_used >= MAX_ANALYSES_PER_SESSION:
         return False, (
             f"🚫 You have used all {MAX_ANALYSES_PER_SESSION} analyses for this session. "
             f"Please refresh the page to start a new session."
         )
     return True, ""
+
 
 # ─────────────────────────────────────────────────────────────
 #  AnalysisResult — the complete output of the pipeline
@@ -146,25 +157,28 @@ def _check_rate_limit(state: SessionState) -> tuple[bool, str]:
 #  one by one as each pipeline step completes.
 # ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AnalysisResult:
     """
     The complete output of the MediScan AI analysis pipeline.
     All fields are pre-formatted markdown strings ready for Gradio display.
     """
-    findings_md:        str = ""
+
+    findings_md: str = ""
     recommendations_md: str = ""
-    summary_md:         str = ""
-    raw_md:             str = ""
-    status:             str = ""
-    pdf_path:           str = ""
-    success:            bool = True
-    error:              str = ""
-    elapsed_seconds:    float = 0.0   # processing time shown in status
-    from_cache:         bool  = False  # True if served from session cache
+    summary_md: str = ""
+    raw_md: str = ""
+    status: str = ""
+    pdf_path: str = ""
+    success: bool = True
+    error: str = ""
+    elapsed_seconds: float = 0.0  # processing time shown in status
+    from_cache: bool = False  # True if served from session cache
     # Raw Pydantic objects — needed by pdf_builder, never sent to Gradio
-    findings:           Optional[ReportFindings]        = None
-    recommendations:    Optional[ReportRecommendations] = None
+    findings: Optional[ReportFindings] = None
+    recommendations: Optional[ReportRecommendations] = None
+
 
 # ─────────────────────────────────────────────────────────────
 #  _build_summary_md() — executive summary builder
@@ -181,20 +195,21 @@ class AnalysisResult:
 #  RC2 could add a dedicated summarizer agent if needed.
 # ─────────────────────────────────────────────────────────────
 
+
 def _build_summary_md(
     parsed: ParsedDocument,
     findings: ReportFindings,
     recommendations: ReportRecommendations,
-    ) -> str:
+) -> str:
     """
     Build the executive summary markdown from pipeline outputs.
     No LLM call — synthesizes existing outputs in Python.
- 
+
     Args:
         parsed:          ParsedDocument from document_parser
         findings:        ReportFindings from report_analyzer
         recommendations: ReportRecommendations from recommendation_generator
- 
+
     Returns:
         Markdown string for the Summary tab in Gradio.
     """
@@ -205,17 +220,20 @@ def _build_summary_md(
         "## 📋 Executive Summary",
         "",
     ]
- 
+
     # ── Patient & report info ─────────────────────────────────
     ctx = findings.patient_context
     patient_parts = []
-    if ctx.age:      patient_parts.append(f"Age: **{ctx.age}**")
-    if ctx.gender:   patient_parts.append(f"Gender: **{ctx.gender}**")
-    if ctx.report_date: patient_parts.append(f"Report Date: **{ctx.report_date}**")
- 
+    if ctx.age:
+        patient_parts.append(f"Age: **{ctx.age}**")
+    if ctx.gender:
+        patient_parts.append(f"Gender: **{ctx.gender}**")
+    if ctx.report_date:
+        patient_parts.append(f"Report Date: **{ctx.report_date}**")
+
     if patient_parts:
         lines += [" &nbsp;·&nbsp; ".join(patient_parts), ""]
- 
+
     lines += [
         f"**File:** `{parsed.file_name}` &nbsp;·&nbsp; "
         f"**Pages:** {parsed.page_count} &nbsp;·&nbsp; "
@@ -225,7 +243,7 @@ def _build_summary_md(
         "---",
         "",
     ]
- 
+
     # ── Clinical summary from analyzer ────────────────────────
     if findings.clinical_summary:
         lines += [
@@ -234,7 +252,7 @@ def _build_summary_md(
             findings.clinical_summary,
             "",
         ]
- 
+
     # ── Overall assessment from recommendation agent ──────────
     if recommendations.overall_assessment:
         lines += [
@@ -243,7 +261,7 @@ def _build_summary_md(
             recommendations.overall_assessment,
             "",
         ]
- 
+
     # ── Quick stats dashboard ─────────────────────────────────
     total = len(findings.lab_values)
     abnormal = len([lv for lv in findings.lab_values if lv.flag != "Normal"])
@@ -252,7 +270,7 @@ def _build_summary_md(
     diet_count = len(recommendations.dietary_recommendations)
     lifestyle_count = len(recommendations.lifestyle_modifications)
     followup_count = len(recommendations.follow_up_actions)
- 
+
     lines += [
         "### 📊 At a Glance",
         "",
@@ -270,14 +288,21 @@ def _build_summary_md(
 
     # ── Urgency summary ───────────────────────────────────────
     urgency_map = {
-        "routine":             ("✅", "Routine", "No immediate action needed. Review at next scheduled check-up."),
-        "consult_soon":        ("🟡", "Consult Soon", "See your physician within 2-4 weeks."),
-        "urgent":              ("🟠", "Urgent", "See your physician within 1 week."),
-        "seek_immediate_care": ("🚨", "Seek Immediate Care", "Contact your doctor today."),
+        "routine": (
+            "✅",
+            "Routine",
+            "No immediate action needed. Review at next scheduled check-up.",
+        ),
+        "consult_soon": ("🟡", "Consult Soon", "See your physician within 2-4 weeks."),
+        "urgent": ("🟠", "Urgent", "See your physician within 1 week."),
+        "seek_immediate_care": (
+            "🚨",
+            "Seek Immediate Care",
+            "Contact your doctor today.",
+        ),
     }
     icon, label, desc = urgency_map.get(
-        recommendations.overall_urgency,
-        ("⚠️", recommendations.overall_urgency, "")
+        recommendations.overall_urgency, ("⚠️", recommendations.overall_urgency, "")
     )
     lines += [
         f"### {icon} Overall Urgency: {label}",
@@ -287,24 +312,25 @@ def _build_summary_md(
         "---",
         "",
     ]
- 
+
     # ── Top abnormal findings ─────────────────────────────────
     if findings.abnormal_flags:
         lines += ["### ⚠️ Key Findings Requiring Attention", ""]
         severity_order = {"critical": 0, "severe": 1, "moderate": 2, "mild": 3}
         sorted_flags = sorted(
-            findings.abnormal_flags,
-            key=lambda f: severity_order.get(f.severity, 4)
+            findings.abnormal_flags, key=lambda f: severity_order.get(f.severity, 4)
         )
         for flag in sorted_flags[:5]:  # top 5 max
             severity_icons = {
-                "critical": "🚨", "severe": "🔴",
-                "moderate": "🟠", "mild": "🟡"
+                "critical": "🚨",
+                "severe": "🔴",
+                "moderate": "🟠",
+                "mild": "🟡",
             }
             icon = severity_icons.get(flag.severity, "⚠️")
             lines.append(f"- {icon} **{flag.severity.title()}:** {flag.finding}")
         lines.append("")
- 
+
     # ── Footer / disclaimer ───────────────────────────────────
     lines += [
         "---",
@@ -314,8 +340,9 @@ def _build_summary_md(
         "",
         f"*⚠️ {config.MEDICAL_DISCLAIMER}*",
     ]
- 
+
     return "\n".join(lines)
+
 
 # ─────────────────────────────────────────────────────────────
 #  MediScanOrchestrator — the main pipeline manager
@@ -325,10 +352,11 @@ def _build_summary_md(
 #  — Returns the final AnalysisResult at the end
 # ─────────────────────────────────────────────────────────────
 
+
 class MediScanOrchestrator:
     """
     Orchestrates the full MediScan AI analysis pipeline.
- 
+
     Usage in app.py:
         orchestrator = MediScanOrchestrator()
         async for update in orchestrator.run(file):
@@ -365,12 +393,12 @@ class MediScanOrchestrator:
         Args:
             file          : Gradio file object
             session_state : SessionState from gr.State() — rate limit + cache
- 
+
         Yields:
             str          — status update messages for the UI progress bar
             SessionState   — updated session state (app.py saves this back)
             AnalysisResult — the complete final result (last yield)
- 
+
         Usage in app.py:
             async for update in orchestrator.run(file, state):
                 if isinstance(update, SessionState):
@@ -409,11 +437,7 @@ class MediScanOrchestrator:
         parsed = await self.parse(file)
 
         if not parsed.success:
-            yield AnalysisResult(
-                status=parsed.error,
-                success=False,
-                error=parsed.error
-            )
+            yield AnalysisResult(status=parsed.error, success=False, error=parsed.error)
             return
 
         raw_md = format_parsed_for_display(parsed)
@@ -427,48 +451,49 @@ class MediScanOrchestrator:
                 error=warning,
             )
             return
- 
+
         yield f"📄 Parsed: {parsed.file_name} ({parsed.word_count:,} words · {parsed.page_count} pages)"
- 
+
         # ── Step 2: Analyze ───────────────────────────────────
         yield "🔬 Step 2/4 — Analyzing findings with AI..."
- 
+
         findings = await self.analyze(parsed)
         findings_md = format_findings_for_display(findings)
- 
+
         abnormal_count = len(findings.abnormal_flags)
         lab_count = len(findings.lab_values)
         yield f"🔬 Analysis complete: {lab_count} lab values · {abnormal_count} abnormal findings"
- 
+
         # ── Step 3: Recommend ─────────────────────────────────
         yield "💡 Step 3/4 — Generating personalized recommendations..."
- 
+
         recommendations = await self.recommend(findings)
         recommendations_md = format_recommendations_for_display(recommendations)
- 
+
         diet_count = len(recommendations.dietary_recommendations)
         lifestyle_count = len(recommendations.lifestyle_modifications)
         yield f"💡 Recommendations ready: {diet_count} dietary · {lifestyle_count} lifestyle"
- 
+
         # ── Step 4: Summarize ─────────────────────────────────
         yield "📋 Step 4/4 — Building executive summary..."
- 
+
         summary_md = _build_summary_md(parsed, findings, recommendations)
- 
+
         # ── Final status ──────────────────────────────────────
         elapsed = time.time() - start_time
         urgency_labels = {
-            "routine":             "✅ Routine",
-            "consult_soon":        "🟡 Consult Soon",
-            "urgent":              "🟠 Urgent",
+            "routine": "✅ Routine",
+            "consult_soon": "🟡 Consult Soon",
+            "urgent": "🟠 Urgent",
             "seek_immediate_care": "🚨 Seek Immediate Care",
         }
         urgency_display = urgency_labels.get(
-            recommendations.overall_urgency,
-            recommendations.overall_urgency
+            recommendations.overall_urgency, recommendations.overall_urgency
         )
 
-        remaining_analyses = MAX_ANALYSES_PER_SESSION - (session_state.analyses_used + 1)
+        remaining_analyses = MAX_ANALYSES_PER_SESSION - (
+            session_state.analyses_used + 1
+        )
 
         final_status = (
             f"✅ Complete — {parsed.file_name} · "
@@ -476,13 +501,13 @@ class MediScanOrchestrator:
             f"Urgency: {urgency_display} · {elapsed:.1f}s · "
             f"{remaining_analyses} analysis remaining this session"
         )
- 
+
         logger.info(f"Orchestrator: pipeline complete | {final_status}")
 
         # ── Update session state ──────────────────────────────
-        session_state.analyses_used      += 1
-        session_state.last_analysis_time  = time.time()
- 
+        session_state.analyses_used += 1
+        session_state.last_analysis_time = time.time()
+
         # ── Yield final result ────────────────────────────────
         result = AnalysisResult(
             findings_md=findings_md,
@@ -493,14 +518,12 @@ class MediScanOrchestrator:
             success=True,
             elapsed_seconds=elapsed,
             from_cache=False,
-            findings=findings,              # stored for PDF download
-            recommendations=recommendations,# stored for PDF download
-        )# Store in session cache — same file won't re-run LLM
+            findings=findings,  # stored for PDF download
+            recommendations=recommendations,  # stored for PDF download
+        )  # Store in session cache — same file won't re-run LLM
         if file_hash:
             session_state.cache[file_hash] = result
- 
+
         # Yield updated state BEFORE result so app.py saves it first
         yield session_state
         yield result
-
-
