@@ -215,6 +215,14 @@ class PatientContext(BaseModel):
     Basic patient information extracted from the report header.
     All fields are Optional because reports may omit any of these.
     """
+    patient_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "Full name of the patient as found in the report header. "
+            "Examples: 'Rohit Sharma', 'John Doe', 'R. Kumar'. "
+            "Leave null if no patient name is explicitly stated in the document."
+        )
+    )
     age: Optional[str] = Field(
         default=None,
         description=(

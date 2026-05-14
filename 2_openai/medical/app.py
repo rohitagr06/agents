@@ -13,12 +13,11 @@ Run with:
 """
 
 import asyncio
+import logging
 import gradio as gr
 import config
-from models.models import github_model
-from tools.document_parser import parse_document, format_parsed_for_display
-from tools.report_analyzer import analyze_report_text, format_findings_for_display
-from tools.recommendation_generator import generate_recommendations, format_recommendations_for_display
+from pipeline.orchestrator import MediScanOrchestrator, AnalysisResult, SessionState
+from output.pdf_builder import generate_pdf
 
 # ─────────────────────────────────────────────
 #  Custom CSS — Deep Medical Aesthetic
@@ -513,7 +512,7 @@ HOW_IT_WORKS_HTML = """
 
 FOOTER_HTML = """
 <div class="medi-footer">
-  MediScan AI &nbsp;·&nbsp; DipsAI &nbsp;·&nbsp; Built with AI Models + OpenAI Agents SDK + Gradio
+  MediScan AI &nbsp;·&nbsp; RC1 &nbsp;·&nbsp; Built with AI Models + OpenAI Agents SDK + Gradio
   &nbsp;·&nbsp; For educational use only
 </div>
 """
@@ -531,111 +530,165 @@ FOOTER_HTML = """
 #  Week 5: orchestrator wires all agents together
 # ─────────────────────────────────────────────
 
-async def analyze_report(file) -> tuple[str, str, str, str, str]:
+logger = logging.getLogger("app")
+
+# Module-level orchestrator instance — stateless, reusable across requests
+_orchestrator = MediScanOrchestrator()
+
+# ─────────────────────────────────────────────────────────────
+#  analyze_report()  — main Gradio event handler
+#
+#  This is an async GENERATOR function — it yields intermediate
+#  status updates so Gradio streams progress to the UI in real time.
+#
+#  HOW GRADIO STREAMING WORKS:
+#  When a Gradio event handler is an async generator (uses yield),
+#  Gradio streams each yielded tuple to the UI immediately.
+#  This is how we show "📄 Parsing..." → "🔬 Analyzing..." live
+#  without the UI freezing during the 20-30 second analysis.
+#
+#  YIELD SIGNATURE (must match outputs= list in .click()):
+#  (findings_md, recommendations_md, summary_md, raw_md,
+#   status, session_state, download_btn_update, history_update)
+# ─────────────────────────────────────────────────────────────
+
+async def analyze_report(file, session_state: dict):
     """
-    Main analysis pipeline — called by Gradio on button click.
-    async because Runner.run() (openai-agents) is fully async.
+    Async generator — streams status updates then final result to Gradio.
 
-    Week 2 state:
-        ✅ File validation        — validator.py
-        ✅ PDF/DOCX extraction    — document_parser.py (PyMuPDF + python-docx)
-        ✅ Text sanitization      — sanitizer.py
-        ✅ Raw text tab populated — real extracted content
-        ✅ Findings tab           — placeholder until Week 3 Agent
-        ✅ Recommendations tab    — placeholder until Week 4 Agent
-        ⏳ Summary tab            — placeholder until Week 5 orchestrator
-
-    Returns:
-        findings_md        : str — structured findings markdown
-        recommendations_md : str — diet/lifestyle/follow-up markdown
-        summary_md         : str — executive summary markdown
-        raw_md             : str — extracted raw text markdown
-        status_msg         : str — status bar message
+    Args:
+        file          : Gradio file object from gr.File
+        session_state : dict representation of SessionState from gr.State()
     """
-    # ── Step 1: Parse the document ───────────────────────────
-    # parse_document() internally calls validate_file() first,
-    # then routes to _parse_pdf() or _parse_docx() based on extension.
-    # It always returns a ParsedDocument — never raises exceptions.
-    # We don't need our own None/extension guards anymore —
-    # the parser handles all of that and returns clear error messages.
-    parsed = parse_document(file)
-
-    # ── Step 2: Handle parsing failure ──────────────────────
-    # If validation failed (no file, wrong type, too big, corrupted)
-    # OR if the PDF/DOCX library threw an error,
-    # parsed.success will be False and parsed.error has the message.
-    if not parsed.success:
-        return ("", "", "", "", parsed.error)
-
-    # ── Step 3: Check text quality ───────────────────────────
-    # Even if parsing succeeded, the text might be too short to analyze
-    # (e.g. a scanned image PDF with no text layer).
-    # We show the raw tab with what we got, and surface the warning.
-    if not parsed.is_meaningful:
-        warning_message = parsed.warning or (
-            "⚠️ Extracted text is too short to analyze meaningfully. "
-            "The document may be a scanned image. RC2 will support OCR."
-        )
-        raw_md = format_parsed_for_display(parsed)
-        return ("", "", "", raw_md, warning_message)
-
-    # ── Step 4: Build the Raw Text tab output ────────────────
-    # format_parsed_for_display() formats the ParsedDocument into
-    # a clean markdown string showing file metadata + extracted content.
-    # This is the REAL extracted text — no more placeholders here.
-
-    raw_md = format_parsed_for_display(parsed)
-
-    # ── Step 5: Run the Report Analyzer Agent ────────────────
-    # This is the first real LLM call in MediScan AI.
-    # analyze_report_text() calls Runner.run(report_analyzer_agent, ...)
-    # and returns a validated ReportFindings Pydantic object.
-    # format_findings_for_display() converts it to markdown for the UI.
-
-
-    findings = await analyze_report_text(
-        text=parsed.text,
-        file_name=parsed.file_name,
-        page_count=parsed.page_count
+    # Rehydrate SessionState from gr.State dict
+    # (gr.State serialises to dict — we reconstruct the dataclass)
+    state = SessionState(
+        analyses_used      = session_state.get("analyses_used", 0),
+        last_analysis_time = session_state.get("last_analysis_time", 0.0),
+        cache              = session_state.get("_cache_obj", {}),
     )
-    findings_md = format_findings_for_display(findings)
 
-    # ── Step 6: Run the Recommendation Agent ─────────────────
-    # generate_recommendations() takes ReportFindings from Step 5
-    # and runs Runner.run(recommendation_agent, ...) to produce
-    # personalized dietary, lifestyle, and follow-up advice.
-    recommendations = await generate_recommendations(findings)
-    recommendations_md = format_recommendations_for_display(recommendations)
+    # Empty result for streaming intermediate status updates
+    def _status_yield(msg: str):
+        return ("", "", "", "", msg, session_state, gr.update(visible=False), gr.update())
 
-    # ── Step 7: Summary placeholder (Week 5) ─────────────────
-    summary_md = f"""
-## 📋 Executive Summary
- 
-> ⏳ **Week 5** — Orchestrator Agent synthesizes findings + recommendations into a summary here.
- 
-### Document Stats
-- **{parsed.word_count:,} words** extracted from **{parsed.page_count} page(s)**
-- Text split into **{parsed.chunk_count} LLM chunk(s)** for processing
-- File: `{parsed.file_name}`
- 
----
-*Analysis generated by MediScan AI {config.APP_VERSION} · GitHub Models (openai/gpt-4.1-mini) · For informational use only*
-*{config.MEDICAL_DISCLAIMER}*
-"""
+    async for update in _orchestrator.run(file, state):
 
-    # ── Step 8: Status message ────────────────────────────────
-    size_info = f"{parsed.word_count:,} words . {parsed.page_count} page(s)"
-    status = f"✅ Parsed successfully — {parsed.file_name} ({size_info})"
+        if isinstance(update, str):
+            # Intermediate status message — stream to status_box
+            yield _status_yield(update)
 
-    # Surface any non-fatal warnings (e.g. partial scanned pages)
-    if parsed.warning:
-        status = f"{status} · {parsed.warning}"
-    return findings_md, recommendations_md, summary_md, raw_md, status
+        elif isinstance(update, SessionState):
+            # Orchestrator finished — save updated state back to gr.State
+            session_state = {
+                "analyses_used":      update.analyses_used,
+                "last_analysis_time": update.last_analysis_time,
+                "_cache_obj":         update.cache,
+            }
+
+        elif isinstance(update, AnalysisResult):
+            result = update
+
+            if not result.success:
+                yield ("", "", "", "", result.status, session_state,
+                       gr.update(visible=False), gr.update())
+                return
+
+            # Store findings + recs in session_state for PDF download
+            session_state["_last_findings"] = result.findings
+            session_state["_last_recs"]     = result.recommendations
+
+            # Build history entry
+            history_html = _build_history_html(session_state)
+
+            yield (
+                result.findings_md,
+                result.recommendations_md,
+                result.summary_md,
+                result.raw_md,
+                result.status,
+                session_state,
+                gr.update(visible=True),   # show Download PDF button
+                gr.update(value=history_html),
+            )
+
+
+def download_pdf(session_state: dict):
+    """
+    Generates PDF and returns the filepath.
+    gr.File serves it — user clicks the filename once to download.
+    This is the most reliable approach across all Gradio versions.
+
+    WHY NOT gr.HTML WITH <script>:
+    Gradio sanitizes injected scripts in gr.HTML for security — the
+    script tag never executes, so auto-click approaches don't work.
+
+    WHY NOT gr.DownloadButton:
+    Inconsistent behaviour across Gradio 4.x minor versions.
+
+    RESULT: one click on Download PDF button → file widget appears →
+    one click on filename → browser downloads the PDF.
+    """
+    findings = session_state.get("_last_findings")
+    recs     = session_state.get("_last_recs")
+
+    if findings is None or recs is None:
+        logger.warning("Download PDF clicked but no analysis in session.")
+        return gr.update(visible=False)
+
+    try:
+        pdf_path = generate_pdf(findings, recs)
+        return gr.update(value=pdf_path, visible=True)
+    except Exception as e:
+        logger.error(f"PDF download failed: {e}")
+        return gr.update(visible=False)
 
 
 async def clear_all():
-    """Reset all outputs. async to match analyze_report pattern."""
-    return None, "", "", "", "", "Ready. Upload a report to begin."
+    """Reset all outputs and session state."""
+    empty_state = {
+        "analyses_used":      0,
+        "last_analysis_time": 0.0,
+        "_cache_obj":         {},
+        "_last_findings":     None,
+        "_last_recs":         None,
+    }
+    return (
+        None, "", "", "", "",
+        "Ready. Upload a report to begin.",
+        empty_state,
+        gr.update(visible=False),
+        gr.update(value=_HISTORY_PLACEHOLDER),
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+#  History Panel Helpers
+# ─────────────────────────────────────────────────────────────
+
+_HISTORY_PLACEHOLDER = "<p style='color:#5A7A96; font-size:0.82rem; padding:8px;'>No analyses yet this session.</p>"
+
+
+def _build_history_html(session_state: dict) -> str:
+    """Build the HTML for the collapsible history panel."""
+    entries = session_state.get("_history", [])
+    if not entries:
+        return _HISTORY_PLACEHOLDER
+
+    rows = ""
+    for entry in reversed(entries):   # newest first
+        urgency_icon = {"routine": "✅", "consult_soon": "🟡",
+                        "urgent": "🔴", "seek_immediate_care": "🚨"}.get(
+            entry.get("urgency", "routine"), "⚪"
+        )
+        rows += (
+            f"<div style='padding:6px 8px; border-bottom:1px solid rgba(0,196,180,0.1);'>"
+            f"<div style='font-size:0.8rem; color:#A8C0D6;'>{entry['time']}</div>"
+            f"<div style='font-size:0.85rem; color:#F0F6FF; margin-top:2px;'>"
+            f"{urgency_icon} {entry['filename']}</div>"
+            f"</div>"
+        )
+    return rows or _HISTORY_PLACEHOLDER
 
 
 # ─────────────────────────────────────────────
@@ -653,6 +706,18 @@ def build_ui() -> gr.Blocks:
         ),
     ) as app:
 
+        # ── Hidden session state ──────────────────────────────
+        # gr.State() persists per browser session — cleared on refresh.
+        # Stores: analyses_used, last_analysis_time, cache, last findings/recs.
+        session_state = gr.State({
+            "analyses_used":      0,
+            "last_analysis_time": 0.0,
+            "_cache_obj":         {},
+            "_last_findings":     None,
+            "_last_recs":         None,
+            "_history":           [],
+        })
+
         # ── Header ──
         gr.HTML(HEADER_HTML)
         gr.HTML(DISCLAIMER_HTML)
@@ -661,7 +726,7 @@ def build_ui() -> gr.Blocks:
         # ── Main Layout ──
         with gr.Row(equal_height=False):
 
-            # ── LEFT COLUMN — Upload & Controls ──
+            # ── LEFT COLUMN — Upload & Controls ──────────────
             with gr.Column(scale=4, min_width=300):
 
                 gr.HTML('<div class="section-label">Upload Document</div>')
@@ -689,6 +754,23 @@ def build_ui() -> gr.Blocks:
 
                 gr.HTML('<div style="height:8px;"></div>')
 
+                # ── Download PDF button (hidden until analysis complete) ──
+                download_btn = gr.Button(
+                    "📥  Download PDF Report",
+                    variant="secondary",
+                    elem_classes=["download-btn"],
+                    visible=False,
+                )
+
+                # gr.HTML receives the self-clicking download anchor from download_pdf()
+                pdf_output = gr.File(
+                    label="📄 PDF Ready — click filename to download",
+                    visible=False,
+                    elem_classes=["pdf-output"],
+                )
+
+                gr.HTML('<div style="height:8px;"></div>')
+
                 clear_btn = gr.Button(
                     "✕  Clear",
                     elem_classes=["clear-btn"],
@@ -700,14 +782,20 @@ def build_ui() -> gr.Blocks:
                 status_box = gr.Textbox(
                     value="Ready. Upload a report to begin.",
                     show_label=False,
-                    label=None,
                     interactive=False,
                     lines=3,
                     elem_classes=["status-box"],
                     container=False,
                 )
 
-                # ── Info Box ──
+                # ── Collapsible History Panel ─────────────────
+                with gr.Accordion("🕐 Session History", open=False):
+                    history_panel = gr.HTML(
+                        value=_HISTORY_PLACEHOLDER,
+                        elem_id="history-panel",
+                    )
+
+                # ── Info Box ──────────────────────────────────
                 gr.HTML("""
                 <div style="margin-top: 20px; background: rgba(0,196,180,0.04);
                      border: 1px solid rgba(0,196,180,0.12); border-radius: 10px; padding: 16px;">
@@ -724,7 +812,6 @@ def build_ui() -> gr.Blocks:
                 </div>
                 """)
 
-                # ── Model Info Box ──
                 gr.HTML("""
                 <div style="margin-top: 12px; background: rgba(79,195,247,0.04);
                      border: 1px solid rgba(79,195,247,0.12); border-radius: 10px; padding: 14px;">
@@ -734,13 +821,13 @@ def build_ui() -> gr.Blocks:
                   </div>
                   <div style="font-size:0.78rem; color:#A8C0D6; line-height:1.9;">
                     🤖 openai/gpt-4.1-mini<br>
-                    ⚡ AI Models API<br>
+                    ⚡ GitHub Models API<br>
                     🔗 OpenAI Agents SDK
                   </div>
                 </div>
                 """)
 
-            # ── RIGHT COLUMN — Output ──
+            # ── RIGHT COLUMN — Output ─────────────────────────
             with gr.Column(scale=8, min_width=500):
 
                 gr.HTML('<div class="section-label">Analysis Results</div>')
@@ -774,21 +861,33 @@ def build_ui() -> gr.Blocks:
         # ── Footer ──
         gr.HTML(FOOTER_HTML)
 
-        # ── Event Handlers ──
-        # analyze_report is async — Gradio 4.x handles async fn natively
+        # ── Event Handlers ────────────────────────────────────
+
+        # Analyze — async generator, streams 8-tuple on each yield
         analyze_btn.click(
             fn=analyze_report,
-            inputs=[file_input],
+            inputs=[file_input, session_state],
             outputs=[
-                findings_output,
-                recommendations_output,
-                summary_output,
-                raw_output,
-                status_box,
+                findings_output,        # 1
+                recommendations_output, # 2
+                summary_output,         # 3
+                raw_output,             # 4
+                status_box,             # 5
+                session_state,          # 6 — updated rate limit + cache
+                download_btn,           # 7 — visible=True on success
+                history_panel,          # 8 — updated HTML
             ],
             show_progress="full",
         )
 
+        # Download PDF — returns self-clicking HTML anchor, no .then() needed
+        download_btn.click(
+            fn=download_pdf,
+            inputs=[session_state],
+            outputs=[pdf_output],
+        )
+
+        # Clear — resets everything including session state
         clear_btn.click(
             fn=clear_all,
             inputs=[],
@@ -799,6 +898,9 @@ def build_ui() -> gr.Blocks:
                 summary_output,
                 raw_output,
                 status_box,
+                session_state,
+                download_btn,
+                history_panel,
             ],
         )
 
@@ -810,7 +912,15 @@ def build_ui() -> gr.Blocks:
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # Hard stop if GITHUB_API_KEY is missing
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)-28s | %(levelname)-8s | %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("gradio").setLevel(logging.WARNING)
+
     is_valid, errors = config.validate_config()
     if not is_valid:
         print("\n❌ Cannot start — missing required config:")
@@ -820,11 +930,12 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     print(f"\n🫀 Starting {config.APP_TITLE} {config.APP_VERSION}")
-    print(f"   Model       : openai/gpt-4.1-mini via AI Models")
+    print(f"   Model       : openai/gpt-4.1-mini via GitHub Models")
     print(f"   SDK         : openai-agents (Agent + Runner.run)")
     print(f"   Environment : {config.APP_ENV}")
     print(f"   Port        : {config.GRADIO_SERVER_PORT}")
-    print(f"   Share       : {config.GRADIO_SHARE}\n")
+    print(f"   Share       : {config.GRADIO_SHARE}")
+    print(f"   Rate limit  : {2} analyses/session · 60s cooldown\n")
 
     app = build_ui()
     app.launch(

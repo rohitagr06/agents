@@ -108,9 +108,10 @@ WHAT TO EXTRACT:
     Base this on the primary content, not just the header.
 
 2.  PATIENT CONTEXT
-    Extract age, gender, report date, and ordering physician if present.
+    Extract patient name, age, gender, report date, and ordering physician if present.
     Use null for any field not found in the document.
-    Never guess or infer patient details that aren't explicity stated.
+    Never guess or infer patient details that aren't explicitly stated.
+    Patient name is usually found in the report header next to "Patient:", "Name:", or "Patient Name:".
 
 3.  LAB VALUE (for lab reports)
     Extract every measurable parameter - hemoglobin, WBC, glucose,
