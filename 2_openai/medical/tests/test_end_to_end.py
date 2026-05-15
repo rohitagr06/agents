@@ -268,10 +268,7 @@ except Exception as e:
 print("\n[4/14] Document parser — PDF and DOCX extraction...")
 
 try:
-    from tools.document_parser import (
-        parse_document,
-        format_parsed_for_display,
-    )
+    from tools.document_parser import parse_document, format_parsed_for_display
 
     # PDF parsing
     if SAMPLE_PDF:

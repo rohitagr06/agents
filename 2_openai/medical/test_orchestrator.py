@@ -152,14 +152,14 @@ print(
 print("\n[3/10] Testing AnalysisResult dataclass...")
 
 result = AnalysisResult()
-assert result.success == True, "Default success should be True"
+assert result.success, "Default success should be True"
 assert result.findings_md == "", "Default findings_md should be empty"
 assert result.recommendations_md == "", "Default recommendations_md should be empty"
 assert result.summary_md == "", "Default summary_md should be empty"
 assert result.raw_md == "", "Default raw_md should be empty"
 assert result.status == "", "Default status should be empty"
 assert result.elapsed_seconds == 0.0, "Default elapsed should be 0.0"
-assert result.from_cache == False, "Default from_cache should be False"
+assert not result.from_cache, "Default from_cache should be False"
 assert result.findings is None, "Default findings object should be None"
 assert result.recommendations is None, "Default recommendations object should be None"
 print("   ✅ AnalysisResult default fields all correct")
@@ -360,7 +360,7 @@ async def test_full_pipeline():
     assert result.elapsed_seconds > 0, "elapsed_seconds should be > 0"
     assert result.findings is not None, "findings object should be stored"
     assert result.recommendations is not None, "recommendations object should be stored"
-    assert result.from_cache == False, "First run should not be cached"
+    assert not result.from_cache, "First run should not be cached"
     assert updated_state.analyses_used == 1, "analyses_used should be 1"
     assert updated_state.last_analysis_time > 0, "last_analysis_time should be set"
 
