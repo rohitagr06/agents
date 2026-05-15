@@ -163,7 +163,12 @@ import importlib
 import utils.sanitizer as _san_module
 
 importlib.reload(_san_module)
-from utils.sanitizer import sanitize, is_meaningful, chunk_text, get_text_stats
+from utils.sanitizer import (
+    sanitize,
+    is_meaningful,
+    chunk_text,
+    get_text_stats,
+)  # noqa: E402
 
 # Test 3a: Hyphenated line break repair
 # "haemo-\nglobin" is a common PDF artefact where a word

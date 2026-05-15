@@ -41,16 +41,10 @@ print("═" * 65)
 print("\n[1/6] Verifying Week 3 imports...")
 
 try:
-    from custom_data_types import (
-        ReportFindings,
-        LabValue,
-        MedicationItem,
-        AbnormalFlag,
-        PatientContext,
-    )
+    from custom_data_types import ReportFindings, LabValue, AbnormalFlag, PatientContext
 
     print(
-        "   ✅ custom_data_types — ReportFindings, LabValue, MedicationItem, AbnormalFlag, PatientContext"
+        "   ✅ custom_data_types — ReportFindings, LabValue, AbnormalFlag, PatientContext"
     )
 except ImportError as e:
     print(f"   ❌ custom_data_types failed: {e}")
@@ -73,7 +67,7 @@ try:
     from tools.report_analyzer import (
         analyze_report_text,
         format_findings_for_display,
-        report_analyzer_agent,
+        report_analyzer_agent,  # noqa: F401
     )
 
     print(
@@ -84,7 +78,7 @@ except ImportError as e:
     sys.exit(1)
 
 try:
-    from agents import Agent, Runner, ModelSettings
+    from agents import Agent, Runner, ModelSettings  # noqa: F401
 
     print("   ✅ agents SDK — Agent, Runner, ModelSettings")
 except ImportError as e:
@@ -149,7 +143,7 @@ findings = ReportFindings(
 assert findings.lab_values == [], "lab_values should default to []"
 assert findings.medications == [], "medications should default to []"
 assert findings.abnormal_flags == [], "abnormal_flags should default to []"
-assert findings.is_non_medical == False, "is_non_medical should default to False"
+assert not findings.is_non_medical, "is_non_medical should default to False"
 assert findings.confidence == "high", "confidence should default to 'high'"
 print("   ✅ ReportFindings — empty list defaults and field defaults correct")
 

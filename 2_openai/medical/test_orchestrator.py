@@ -90,7 +90,6 @@ except ImportError as e:
     sys.exit(1)
 
 try:
-    from tools.document_parser import ParsedDocument
     from tools.report_analyzer import format_findings_for_display
     from tools.recommendation_generator import format_recommendations_for_display
 
@@ -411,7 +410,7 @@ async def test_parse_failure():
             result = update
 
     assert result is not None, "Should yield an AnalysisResult even on failure"
-    assert result.success == False, "success should be False on parse failure"
+    assert not result.success, "success should be False on parse failure"
     assert result.error != "", "error should be populated"
     assert result.status != "", "status should contain the error message"
     # UI outputs should be empty — nothing to show
@@ -446,7 +445,7 @@ async def test_rate_limit():
             result = update
 
     assert result is not None, "Should yield AnalysisResult"
-    assert result.success == False, "Should be blocked by rate limit"
+    assert not result.success, "Should be blocked by rate limit"
     assert (
         "session" in result.error.lower() or "analyses" in result.error.lower()
     ), f"Error should mention session limit: {result.error}"
@@ -463,7 +462,7 @@ async def test_rate_limit():
             result2 = update
 
     assert result2 is not None
-    assert result2.success == False
+    assert not result2.success
     assert (
         "wait" in result2.error.lower() or "seconds" in result2.error.lower()
     ), f"Error should mention cooldown: {result2.error}"

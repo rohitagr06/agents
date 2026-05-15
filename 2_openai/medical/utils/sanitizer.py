@@ -1,32 +1,32 @@
 """
 utils/sanitizer.py — Text Sanitization for MediScan AI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+ 
 PURPOSE:
     Raw text extracted from PDFs and DOCX files is messy.
     Before we send it to the LLM, we must clean it up.
-
+ 
     Why? Because LLMs work best with clean, structured input.
     Feeding garbage in produces garbage out. Specifically:
-
+ 
     PDF PROBLEMS:
     — Extra whitespace and blank lines from layout rendering
     — Hyphenated line breaks ("haemo-\nglobin" instead of "haemoglobin")
     — Garbled encoding artefacts from font embedding (ï¬‚ instead of fl)
     — Page numbers, headers, footers mixed into body text
     — Column layout bleed (text from two columns merging on one line)
-
+ 
     DOCX PROBLEMS:
     — Empty paragraphs used as spacers
     — Repeated section headers from styles
     — Track-change fragments (deleted text that was kept in XML)
-
+ 
     TOKEN LIMIT PROBLEM:
     — gpt-4.1-mini has a context window. A 30-page discharge summary
       can easily exceed what we can send in one API call.
     — We must chunk long documents intelligently rather than cutting
       them off mid-sentence or sending too little.
-
+ 
 WHY A SEPARATE FILE?
     Sanitization is its own domain of logic. Keeping it separate means:
     — Easy to test with just text strings (no file I/O needed)
@@ -103,7 +103,13 @@ def sanitize(raw_text: str) -> str:
 
     text = str(raw_text)
 
-    # ── Step 1: Fix hyphenated line breaks ───────────────────
+    # ── Step 1: Strip form feed characters (\x0c) ────────────
+    # PDF page-break markers appear inline as \x0c and confuse
+    # table row parsing — e.g. "Page 3\x0cHemoglobin 15.3 g/dL".
+    # Replace with newline so blank-line collapse handles it cleanly.
+    text = text.replace("\x0c", "\n")
+
+    # ── Step 2: Fix hyphenated line breaks ───────────────────
     # PDFs often break words across lines with a hyphen.
     # "haemo-\nglobin" should be "haemoglobin"
     # "cardio-\nvascular" should be "cardiovascular"
@@ -112,7 +118,7 @@ def sanitize(raw_text: str) -> str:
 
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
 
-    # ── Step 2: Normalize unicode artefacts ──────────────────
+    # ── Step 3: Normalize unicode artefacts ──────────────────
     # PDFs with embedded fonts sometimes produce garbled characters.
     # We replace the most common ones with their correct equivalents.
     # "fi" ligature artefact → "fi"
@@ -135,14 +141,14 @@ def sanitize(raw_text: str) -> str:
     for bad_char, good_char in replacements.items():
         text = text.replace(bad_char, good_char)
 
-    # ── Step 3: Collapse runs of spaces/tabs ─────────────────
+    # ── Step 4: Collapse runs of spaces/tabs ─────────────────
     # Multiple consecutive spaces or tabs become a single space.
     # "Hemoglobin      :      11.2" → "Hemoglobin : 11.2"
     # \t is tab, we treat it same as a space for cleanliness.
 
     text = re.sub(r"[ \t]+", " ", text)
 
-    # ── Step 4: Remove page numbers and header/footer noise ──
+    # ── Step 5: Remove page numbers and header/footer noise ──
     # Common patterns in medical PDFs:
     # — "Page 1 of 5" or "Page 1"
     # — "Confidential" appearing as page header on every page
@@ -154,13 +160,13 @@ def sanitize(raw_text: str) -> str:
     # text = re.sub(r"(?im)^[ \t]*\d+[ \t]*$", "", text)
     text = re.sub(r"(?im)^[ \t]*confidential[ \t]*$", "", text)
 
-    # ── Step 5: Collapse excessive blank lines ────────────────
+    # ── Step 6: Collapse excessive blank lines ────────────────
     # Three or more consecutive newlines become two (one blank line).
     # This preserves paragraph structure without the huge gaps.
 
     text = re.sub(r"\n{3,}", "\n\n", text)
 
-    # ── Step 6: Strip outer whitespace ───────────────────────
+    # ── Step 7: Strip outer whitespace ───────────────────────
     text = text.strip()
 
     return text

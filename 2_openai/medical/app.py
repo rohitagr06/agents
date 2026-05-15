@@ -765,12 +765,14 @@ def build_ui() -> gr.Blocks:
                     height=170,
                 )
 
-                gr.HTML("""
+                gr.HTML(
+                    """
                 <div style="font-size:0.75rem; color:#5A7A96; text-align:center; margin: -8px 0 14px; line-height:1.5;">
                   Supported formats: PDF · DOCX · DOC &nbsp;|&nbsp; Max size: 10 MB<br>
                   Your document is processed in-session and never stored.
                 </div>
-                """)
+                """
+                )
 
                 analyze_btn = gr.Button(
                     "🔬  Analyze Report",
@@ -822,7 +824,8 @@ def build_ui() -> gr.Blocks:
                     )
 
                 # ── Info Box ──────────────────────────────────
-                gr.HTML("""
+                gr.HTML(
+                    """
                 <div style="margin-top: 20px; background: rgba(0,196,180,0.04);
                      border: 1px solid rgba(0,196,180,0.12); border-radius: 10px; padding: 16px;">
                   <div style="font-size:0.7rem; letter-spacing:1.5px; text-transform:uppercase;
@@ -836,9 +839,11 @@ def build_ui() -> gr.Blocks:
                     🏥 Discharge Summaries
                   </div>
                 </div>
-                """)
+                """
+                )
 
-                gr.HTML("""
+                gr.HTML(
+                    """
                 <div style="margin-top: 12px; background: rgba(79,195,247,0.04);
                      border: 1px solid rgba(79,195,247,0.12); border-radius: 10px; padding: 14px;">
                   <div style="font-size:0.7rem; letter-spacing:1.5px; text-transform:uppercase;
@@ -851,7 +856,8 @@ def build_ui() -> gr.Blocks:
                     🔗 OpenAI Agents SDK
                   </div>
                 </div>
-                """)
+                """
+                )
 
             # ── RIGHT COLUMN — Output ─────────────────────────
             with gr.Column(scale=8, min_width=500):

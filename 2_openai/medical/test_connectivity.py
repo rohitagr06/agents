@@ -79,8 +79,8 @@ if missing:
 
 print("\n[3/4] Testing GitHub Models connection...")
 
-from agents import Agent, Runner
-from models.models import github_model
+from agents import Agent, Runner  # noqa: E402
+from models.models import github_model  # noqa: E402
 
 
 class PingResponse(BaseModel):
