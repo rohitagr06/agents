@@ -30,6 +30,6 @@ github_client = AsyncOpenAI(
 )
 
 github_model = OpenAIChatCompletionsModel(
-    model="openai/gpt-4o-mini",
+    model="openai/gpt-4.1-mini",
     openai_client=github_client,
 )
