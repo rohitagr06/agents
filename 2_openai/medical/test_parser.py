@@ -28,9 +28,8 @@ Run with:
     uv run python test_parser.py
 """
 
-import importlib
-import os
 import sys
+import os
 import tempfile
 
 print("\n" + "═" * 65)
@@ -48,9 +47,9 @@ print("═" * 65)
 print("\n[1/6] Verifying Week 2 imports...")
 
 try:
-    from utils.validator import validate_file
+    from utils.validator import validate_file, ValidationResult
 
-    print("   ✅ utils.validator    — validate_file")
+    print("   ✅ utils.validator    — validate_file, ValidationResult")
 except ImportError as e:
     print(f"   ❌ utils.validator failed: {e}")
     sys.exit(1)
@@ -68,10 +67,13 @@ except ImportError as e:
 try:
     from tools.document_parser import (
         parse_document,
+        ParsedDocument,
         format_parsed_for_display,
     )
 
-    print("   ✅ tools.document_parser — parse_document, format_parsed_for_display")
+    print(
+        "   ✅ tools.document_parser — parse_document, ParsedDocument, format_parsed_for_display"
+    )
 except ImportError as e:
     print(f"   ❌ tools.document_parser failed: {e}")
     sys.exit(1)
@@ -157,15 +159,16 @@ print("\n[3/6] Testing sanitizer.py...")
 
 # Clear any stale bytecode before testing
 # This prevents old cached .pyc files from causing unexpected behaviour
-import utils.sanitizer as _san_module  # noqa: E402
+import importlib
+import utils.sanitizer as _san_module
 
 importlib.reload(_san_module)
-from utils.sanitizer import (  # noqa: E402
+from utils.sanitizer import (
     sanitize,
     is_meaningful,
     chunk_text,
     get_text_stats,
-)
+)  # noqa: E402
 
 # Test 3a: Hyphenated line break repair
 # "haemo-\nglobin" is a common PDF artefact where a word
@@ -364,6 +367,8 @@ finally:
 # ─────────────────────────────────────────────────────────────
 
 print("\n[5/6] Testing DOCX parsing with synthetic medical document...")
+
+from docx import Document
 
 with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
     docx_test_path = tmp.name
