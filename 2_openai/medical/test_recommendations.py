@@ -47,10 +47,7 @@ except ImportError as e:
     sys.exit(1)
 
 try:
-    from prompts.recommendation_prompt import (
-        RECOMMENDATION_SYSTEM_PROMPT,
-        build_recommendation_user_message,
-    )
+    from prompts.recommendation_prompt import build_recommendation_user_message
 
     print("   ✅ prompts.recommendation_prompt")
 except ImportError as e:
@@ -61,7 +58,6 @@ try:
     from tools.recommendation_generator import (
         generate_recommendations,
         format_recommendations_for_display,
-        recommendation_agent,
         _format_findings_for_recommendation,
     )
 
