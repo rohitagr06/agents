@@ -157,7 +157,6 @@ def sanitize(raw_text: str) -> str:
     # re.MULTILINE makes ^ and $ match start/end of each LINE.
 
     text = re.sub(r"(?im)^[ \t]*page\s+\d+(\s+of\s+\d+)?[ \t]*$", "", text)
-    # text = re.sub(r"(?im)^[ \t]*\d+[ \t]*$", "", text)
     text = re.sub(r"(?im)^[ \t]*confidential[ \t]*$", "", text)
 
     # ── Step 6: Collapse excessive blank lines ────────────────

@@ -14,9 +14,11 @@ Run with:
 
 import logging
 import gradio as gr
+from datetime import datetime
 import config
 from pipeline.orchestrator import MediScanOrchestrator, AnalysisResult, SessionState
 from output.pdf_builder import generate_pdf
+from html import escape
 
 # ─────────────────────────────────────────────
 #  Custom CSS — Deep Medical Aesthetic
@@ -615,6 +617,21 @@ async def analyze_report(file, session_state: dict):
             session_state["_last_findings"] = result.findings
             session_state["_last_recs"] = result.recommendations
 
+            # Append to session history so the panel shows past analyses
+            session_state.setdefault("_history", []).append(
+                {
+                    "time": datetime.now().strftime("%H:%M:%S"),
+                    "filename": (
+                        file.name.split("/")[-1] if hasattr(file, "name") else "Unknown"
+                    ),
+                    "urgency": (
+                        result.recommendations.overall_urgency
+                        if result.recommendations
+                        else "routine"
+                    ),
+                }
+            )
+
             # Build history entry
             history_html = _build_history_html(session_state)
 
@@ -704,11 +721,13 @@ def _build_history_html(session_state: dict) -> str:
             "urgent": "🔴",
             "seek_immediate_care": "🚨",
         }.get(entry.get("urgency", "routine"), "⚪")
+        safe_time = escape(str(entry.get("time", "")))
+        safe_filename = escape(str(entry.get("filename", "")))
         rows += (
             f"<div style='padding:6px 8px; border-bottom:1px solid rgba(0,196,180,0.1);'>"
-            f"<div style='font-size:0.8rem; color:#A8C0D6;'>{entry['time']}</div>"
+            f"<div style='font-size:0.8rem; color:#A8C0D6;'>{safe_time}</div>"
             f"<div style='font-size:0.85rem; color:#F0F6FF; margin-top:2px;'>"
-            f"{urgency_icon} {entry['filename']}</div>"
+            f"{urgency_icon} {safe_filename}</div>"
             f"</div>"
         )
     return rows or _HISTORY_PLACEHOLDER

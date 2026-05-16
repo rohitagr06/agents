@@ -37,6 +37,8 @@ import logging
 import os
 from datetime import datetime
 import tempfile
+import atexit
+import re
 
 from custom_data_types import ReportFindings, ReportRecommendations
 
@@ -71,27 +73,31 @@ DARK_TEXT = colors.HexColor("#1A1A2E")
 GREY_TEXT = colors.HexColor("#5A6A7A")
 WHITE = colors.white
 
+# Tuples of (hex_string, ReportLab_color)
+# hex_string  → used in Paragraph() XML markup (font color attribute)
+# ReportLab_color → used in TableStyle() directives
 FLAG_COLORS = {
-    "Normal": colors.HexColor("#27AE60"),
-    "Low": colors.HexColor("#E67E22"),
-    "High": colors.HexColor("#E74C3C"),
-    "Borderline": colors.HexColor("#F39C12"),
-    "Critical": colors.HexColor("#8E1010"),
-    "Unknown": colors.HexColor("#7F8C8D"),
+    "Normal": ("#27AE60", colors.HexColor("#27AE60")),
+    "Low": ("#E67E22", colors.HexColor("#E67E22")),
+    "High": ("#E74C3C", colors.HexColor("#E74C3C")),
+    "Borderline": ("#F39C12", colors.HexColor("#F39C12")),
+    "Critical": ("#8E1010", colors.HexColor("#8E1010")),
+    "Unknown": ("#7F8C8D", colors.HexColor("#7F8C8D")),
 }
 
 SEVERITY_COLORS = {
-    "critical": colors.HexColor("#8E1010"),
-    "severe": colors.HexColor("#E74C3C"),
-    "moderate": colors.HexColor("#F39C12"),
-    "mild": colors.HexColor("#27AE60"),
+    "critical": ("#8E1010", colors.HexColor("#8E1010")),
+    "severe": ("#E74C3C", colors.HexColor("#E74C3C")),
+    "moderate": ("#F39C12", colors.HexColor("#F39C12")),
+    "mild": ("#27AE60", colors.HexColor("#27AE60")),
 }
 
+
 URGENCY_LABELS = {
-    "routine": "✅  ROUTINE — Standard follow-up recommended",
-    "consult_soon": "🟡  ATTENTION — Consult your doctor soon",
-    "urgent": "🔴  URGENT — Seek medical attention promptly",
-    "seek_immediate_care": "🚨  IMMEDIATE — Seek emergency care now",
+    "routine": "ROUTINE — Standard follow-up recommended",
+    "consult_soon": "ATTENTION — Consult your doctor soon",
+    "urgent": "URGENT — Seek medical attention promptly",
+    "seek_immediate_care": "IMMEDIATE — Seek emergency care now",
 }
 
 URGENCY_BG_COLORS = {
@@ -529,14 +535,16 @@ def _lab_values_section(s: dict, findings: ReportFindings) -> list:
     style = list(_BASE_STYLE)
 
     for i, lv in enumerate(findings.lab_values, 1):
-        flag_color = FLAG_COLORS.get(lv.flag, colors.HexColor("#7F8C8D"))
+        flag_hex, flag_color = FLAG_COLORS.get(
+            lv.flag, ("#7F8C8D", colors.HexColor("#7F8C8D"))
+        )
         rows.append(
             [
                 Paragraph(lv.parameter, s["td"]),
                 Paragraph(lv.value, s["td_c"]),
                 Paragraph(lv.reference_range, s["td"]),
                 Paragraph(
-                    f'<font color="{flag_color.hexval()}"><b>{lv.flag}</b></font>',
+                    f'<font color="{flag_hex}"><b>{lv.flag}</b></font>',
                     s["td_c"],
                 ),
             ]
@@ -563,13 +571,13 @@ def _abnormal_section(s: dict, findings: ReportFindings) -> list:
 
     order = {"critical": 0, "severe": 1, "moderate": 2, "mild": 3}
     sorted_ = sorted(findings.abnormal_flags, key=lambda f: order.get(f.severity, 4))
-    elements = [Paragraph("⚠️  Abnormal Findings", s["section_title"])]
+    elements = [Paragraph("Abnormal Findings", s["section_title"])]
 
     for flag in sorted_:
-        c = SEVERITY_COLORS.get(flag.severity, GREY_TEXT)
+        c_hex, c = SEVERITY_COLORS.get(flag.severity, ("#5A6A7A", GREY_TEXT))
         elements.append(
             Paragraph(
-                f'• <font color="{c.hexval()}"><b>[{flag.severity.upper()}]</b></font>  {flag.finding}',
+                f'<font color="{c_hex}"><b>[{flag.severity.upper()}]</b></font>  {flag.finding}',
                 s["bullet"],
             )
         )
@@ -609,7 +617,7 @@ def _medications_section(s: dict, findings: ReportFindings) -> list:
 
 def _recommendations_section(s: dict, recs: ReportRecommendations) -> list:
     elements = [
-        Paragraph("💡  Personalized Recommendations", s["section_title"]),
+        Paragraph("Personalized Recommendations", s["section_title"]),
         HRFlowable(width=CONTENT_W, thickness=1, color=MEDICAL_BLUE, spaceAfter=6),
     ]
 
@@ -636,7 +644,7 @@ def _recommendations_section(s: dict, recs: ReportRecommendations) -> list:
 
     # Dietary recommendations — uses .suggestion, .reason, .priority, .foods_to_increase, .foods_to_avoid
     if recs.dietary_recommendations:
-        elements.append(Paragraph("🥗  Dietary Recommendations", s["section_title"]))
+        elements.append(Paragraph("Dietary Recommendations", s["section_title"]))
         for i, diet in enumerate(recs.dietary_recommendations, 1):
             pc = PRIORITY_COLORS.get(diet.priority.lower(), "#1B4F8A")
             block = [
@@ -665,7 +673,7 @@ def _recommendations_section(s: dict, recs: ReportRecommendations) -> list:
 
     # Lifestyle modifications — uses .modification, .reason, .priority
     if recs.lifestyle_modifications:
-        elements.append(Paragraph("🏃  Lifestyle Modifications", s["section_title"]))
+        elements.append(Paragraph("Lifestyle Modifications", s["section_title"]))
         for i, ls in enumerate(recs.lifestyle_modifications, 1):
             block = [
                 Paragraph(f"{i}. {ls.modification}", s["rec_title"]),
@@ -676,7 +684,7 @@ def _recommendations_section(s: dict, recs: ReportRecommendations) -> list:
 
     # Follow-up actions — uses .action, .timeframe, .urgency, .specialist
     if recs.follow_up_actions:
-        elements.append(Paragraph("📅  Follow-Up Actions", s["section_title"]))
+        elements.append(Paragraph("Follow-Up Actions", s["section_title"]))
         for i, fa in enumerate(recs.follow_up_actions, 1):
             specialist_str = f"  →  {fa.specialist}" if fa.specialist else ""
             urgency_str = f"  |  Priority: {fa.urgency.title()}" if fa.urgency else ""
@@ -703,6 +711,12 @@ def _recommendations_section(s: dict, recs: ReportRecommendations) -> list:
 # ─────────────────────────────────────────────────────────────
 #  generate_pdf()  — PUBLIC ENTRY POINT
 # ─────────────────────────────────────────────────────────────
+def _safe_unlink(path: str) -> None:
+    """Delete a temp file, ignoring errors if already deleted."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
 
 
 def generate_pdf(
@@ -735,10 +749,7 @@ def generate_pdf(
     date_str = datetime.now().strftime("%Y-%m-%d")
     generated_at = datetime.now().strftime("%B %d, %Y  %H:%M")
     safe_seg = (
-        patient_name.replace(" ", "_")
-        .replace("·", "")
-        .replace("/", "-")
-        .strip("_")[:20]
+        re.sub(r"[^a-zA-Z0-9_-]", "_", patient_name)[:20]
         if patient_name != "Not Specified"
         else "Report"
     )
@@ -748,6 +759,12 @@ def generate_pdf(
     tmp = tempfile.NamedTemporaryFile(suffix=".pdf", prefix="mediscan_", delete=False)
     tmp_path = tmp.name
     tmp.close()
+
+    # Register cleanup so the file is deleted when the process exits
+    # This handles: normal shutdown, HF Spaces restart, Gradio reload
+    # It does NOT help if the OS kills the process hard (SIGKILL) —
+    # but that is acceptable since /tmp is cleared on container restart anyway
+    atexit.register(_safe_unlink, tmp_path)
 
     logger.info(f"Generating PDF: {filename} → {tmp_path}")
 
@@ -759,7 +776,7 @@ def generate_pdf(
         story += _cover_page(s, findings, patient_name, generated_at)
 
         # Findings pages
-        story.append(Paragraph("🔬  Report Findings", s["section_title"]))
+        story.append(Paragraph("Report Findings", s["section_title"]))
         story.append(
             HRFlowable(width=CONTENT_W, thickness=1, color=MEDICAL_BLUE, spaceAfter=6)
         )

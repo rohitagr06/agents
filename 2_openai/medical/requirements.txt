@@ -13,7 +13,6 @@ python-docx>=1.1.0       # DOCX extraction
 
 # Output Generation
 reportlab>=4.1.0         # Programmatic PDF report generation
-Pillow>=10.0.0           # Image handling within PDFs
 
 # UI
 gradio>=4.36.0           # Web UI — also used for HuggingFace Spaces deploy
@@ -21,4 +20,3 @@ gradio>=4.36.0           # Web UI — also used for HuggingFace Spaces deploy
 # Utilities
 python-dotenv>=1.0.0     # Loads .env file
 pydantic>=2.7.0          # Structured output validation (BaseModel for agent output_type)
-tenacity>=8.3.0          # Retry logic for resilient API calls

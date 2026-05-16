@@ -66,7 +66,6 @@ CHUNKING STRATEGY:
 """
 
 import logging
-import asyncio
 from agents import Agent, Runner, ModelSettings
 from models.models import github_model
 from custom_data_types import ReportFindings, PatientContext
@@ -329,7 +328,6 @@ async def analyze_report_text(
     # We use the first chunk for the primary analysis.
     # chunk_text() with default max_chars returns [full_text] for
     # most medical reports, so this is a no-op in the common case.
-    # chunks = chunk_text(text)
 
     chunks = chunk_text(text, max_chars=SAFE_CHARS_PER_CHUNK)
     if not chunks:
@@ -380,10 +378,14 @@ async def analyze_report_text(
             )
 
     try:
-        # Run all chunk analyses in parallel
-        all_findings: list[ReportFindings] = await asyncio.gather(
-            *[analyze_single_chunk(chunk, idx + 1) for idx, chunk in enumerate(chunks)]
-        )
+        # Run chunk analyses sequentially to avoid GitHub Models rate limit
+        # asyncio.gather() fires all chunks simultaneously — on free tier this
+        # hits 429 Too Many Requests immediately for multi-chunk documents.
+        # Sequential is slightly slower but reliable and rate-limit-safe.
+        all_findings: list[ReportFindings] = []
+        for idx, chunk in enumerate(chunks):
+            findings = await analyze_single_chunk(chunk, idx + 1)
+            all_findings.append(findings)
 
         # ── Step 3: Merge all chunk results ──────────────────
         # Primary findings come from chunk 1 (has patient context,

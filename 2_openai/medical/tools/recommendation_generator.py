@@ -135,7 +135,7 @@ def _format_findings_for_recommendation(findings: ReportFindings) -> str:
         lines.append("ABNORMAL FINDINGS (requires recommendations):")
         for flag in findings.abnormal_flags:
             lines.append(
-                f"  [{flag.severity.upper()}] {flag.finding}"
+                f"  [{flag.severity.upper()}] {flag.finding} "
                 f"(category: {flag.category})"
             )
         lines.append("")
@@ -359,7 +359,7 @@ URGENCY_EMOJI: dict[str, str] = {
 }
 
 
-def format_recommendations_for_display(recs=ReportRecommendations) -> str:
+def format_recommendations_for_display(recs: ReportRecommendations) -> str:
     """
     Convert a ReportRecommendations object into markdown for
     the Gradio Recommendations tab.

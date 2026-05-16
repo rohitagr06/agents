@@ -24,9 +24,16 @@ load_dotenv(override=True)
 
 GITHUB_BASE_URL = "https://models.github.ai/inference"
 
+_api_key = os.environ.get("GITHUB_API_KEY")
+if not _api_key:
+    raise EnvironmentError(
+        "GITHUB_API_KEY is not set. "
+        "Add it to your .env file or HuggingFace Space secrets. "
+        "Get one at: github.com → Settings → Developer settings → Personal access tokens"
+    )
 github_client = AsyncOpenAI(
     base_url=GITHUB_BASE_URL,
-    api_key=os.environ.get("GITHUB_API_KEY"),
+    api_key=_api_key,
 )
 
 github_model = OpenAIChatCompletionsModel(

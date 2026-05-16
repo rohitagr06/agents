@@ -103,13 +103,13 @@ class SessionState:
 
 def _compute_file_hash(file) -> str:
     """
-    Compute MD5 hash of file bytes for cache key.
+    Compute SHA-256 hash of file bytes for cache key.
     Returns empty string on any error — cache miss is safe.
     """
     try:
         path = file.name if hasattr(file, "name") else str(file)
         with open(path, "rb") as f:
-            return hashlib.md5(f.read()).hexdigest()
+            return hashlib.sha256(f.read()).hexdigest()
     except Exception:
         return ""
 
@@ -421,7 +421,7 @@ class MediScanOrchestrator:
             return
 
         # ── Cache check ───────────────────────────────────────
-        # MD5 hash of file bytes — same file content = same hash.
+        # SHA-256 hash of file bytes — same content = same hash.
         # Cache is session-only: cleared on page refresh.
         file_hash = _compute_file_hash(file)
         if file_hash and file_hash in session_state.cache:
@@ -457,7 +457,16 @@ class MediScanOrchestrator:
         # ── Step 2: Analyze ───────────────────────────────────
         yield "🔬 Step 2/4 — Analyzing findings with AI..."
 
-        findings = await self.analyze(parsed)
+        try:
+            findings = await self.analyze(parsed)
+        except Exception as e:
+            logger.error(f"Orchestrator: analyze() failed unexpectedly: {e}")
+            yield AnalysisResult(
+                raw_md=raw_md,
+                status="⚠️ Analysis failed due to an unexpected error. Please try again.",
+                success=False,
+                error=str(e),
+            )
         findings_md = format_findings_for_display(findings)
 
         abnormal_count = len(findings.abnormal_flags)
@@ -467,7 +476,19 @@ class MediScanOrchestrator:
         # ── Step 3: Recommend ─────────────────────────────────
         yield "💡 Step 3/4 — Generating personalized recommendations..."
 
-        recommendations = await self.recommend(findings)
+        try:
+            recommendations = await self.recommend(findings)
+        except Exception as e:
+            logger.error(f"Orchestrator: recommend() failed unexpectedly: {e}")
+            yield AnalysisResult(
+                raw_md=raw_md,
+                findings_md=findings_md,
+                status="⚠️ Recommendations could not be generated. Your findings were extracted successfully.",
+                success=False,
+                error=str(e),
+            )
+            return
+
         recommendations_md = format_recommendations_for_display(recommendations)
 
         diet_count = len(recommendations.dietary_recommendations)
