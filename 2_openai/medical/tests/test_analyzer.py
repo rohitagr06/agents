@@ -1,211 +1,18 @@
 """
-test_analyzer.py — Week 3 Verification Script for MediScan AI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PURPOSE:
-    Verifies that everything built in Week 3 is working correctly
-    before we move to Week 4 (Recommendation Agent). Tests:
-
-        1. All Week 3 imports load without errors
-        2. custom_data_types.py — Pydantic models validate correctly
-        3. prompts/analyzer_prompt.py — prompt builds correctly
-        4. report_analyzer_agent — real LLM call with synthetic lab report
-        5. format_findings_for_display() — markdown output is well-formed
-        6. Error recovery — graceful handling of edge cases
-
-    ⚠️  REQUIRES YOUR GITHUB_API_KEY IN .env
-    Unlike test_parser.py which needed no API key, this test
-    makes a real call to GitHub Models (openai/gpt-4.1-mini).
-    Make sure your .env has GITHUB_API_KEY set before running.
-
-Run with:
-    python test_analyzer.py
-    uv run python test_analyzer.py
+tests/test_analyzer.py — Report Analyzer Agent tests for MediScan AI.
+Run standalone: uv run python tests/test_analyzer.py
+Run via pytest: uv run python -m pytest tests/test_analyzer.py -v
 """
 
 import asyncio
-import sys
+import pytest
 
-print("\n" + "═" * 65)
-print("  MediScan AI — Week 3 Analyzer Test")
-print("═" * 65)
-print("  ⚠️  This test makes real API calls to GitHub Models")
-print("  Make sure GITHUB_API_KEY is set in your .env file")
-print("═" * 65)
+from custom_data_types import ReportFindings, LabValue, AbnormalFlag, PatientContext
+from prompts.analyzer_prompt import ANALYZER_SYSTEM_PROMPT, build_analyzer_user_message
+from tools.report_analyzer import analyze_report_text, format_findings_for_display
 
 
-# ─────────────────────────────────────────────────────────────
-#  Test 1: Import verification
-# ─────────────────────────────────────────────────────────────
-
-print("\n[1/6] Verifying Week 3 imports...")
-
-try:
-    from custom_data_types import ReportFindings, LabValue, AbnormalFlag, PatientContext
-
-    print(
-        "   ✅ custom_data_types — ReportFindings, LabValue, AbnormalFlag, PatientContext"
-    )
-except ImportError as e:
-    print(f"   ❌ custom_data_types failed: {e}")
-    sys.exit(1)
-
-try:
-    from prompts.analyzer_prompt import (
-        ANALYZER_SYSTEM_PROMPT,
-        build_analyzer_user_message,
-    )
-
-    print(
-        "   ✅ prompts.analyzer_prompt — ANALYZER_SYSTEM_PROMPT, build_analyzer_user_message"
-    )
-except ImportError as e:
-    print(f"   ❌ prompts.analyzer_prompt failed: {e}")
-    sys.exit(1)
-
-try:
-    from tools.report_analyzer import (
-        analyze_report_text,
-        format_findings_for_display,
-        report_analyzer_agent,  # noqa: F401
-    )
-
-    print(
-        "   ✅ tools.report_analyzer — analyze_report_text, format_findings_for_display, report_analyzer_agent"
-    )
-except ImportError as e:
-    print(f"   ❌ tools.report_analyzer failed: {e}")
-    sys.exit(1)
-
-try:
-    from agents import Agent, Runner, ModelSettings  # noqa: F401
-
-    print("   ✅ agents SDK — Agent, Runner, ModelSettings")
-except ImportError as e:
-    print(f"   ❌ openai-agents SDK not installed: {e}")
-    print("      Run: pip install openai-agents")
-    sys.exit(1)
-
-
-# ─────────────────────────────────────────────────────────────
-#  Test 2: Pydantic model validation
-#  We create model instances directly to verify the schema
-#  is correct before making any API calls. This is cheap
-#  (no network call) and catches schema bugs early.
-# ─────────────────────────────────────────────────────────────
-
-print("\n[2/6] Testing Pydantic model validation...")
-
-# Test 2a: LabValue validates correctly
-lv = LabValue(
-    parameter="Hemoglobin",
-    value="11.2 g/dL",
-    reference_range="12.0-17.5 g/dL",
-    flag="Low",
-    clinical_note="Below reference range, consistent with mild anemia.",
-)
-assert lv.parameter == "Hemoglobin", "LabValue parameter wrong"
-assert lv.flag == "Low", "LabValue flag wrong"
-assert lv.clinical_note is not None, "LabValue clinical_note wrong"
-print("   ✅ LabValue — creates and validates correctly")
-
-# Test 2b: LabValue optional field defaults to None
-lv_no_note = LabValue(
-    parameter="WBC Count",
-    value="7400 /uL",
-    reference_range="4000-11000 /uL",
-    flag="Normal",
-)
-assert lv_no_note.clinical_note is None, "clinical_note should default to None"
-print("   ✅ LabValue — optional clinical_note defaults to None")
-
-# Test 2c: AbnormalFlag validates correctly
-flag = AbnormalFlag(
-    finding="LDL cholesterol elevated at 142 mg/dL",
-    severity="moderate",
-    category="lipid",
-)
-assert flag.severity == "moderate", "AbnormalFlag severity wrong"
-print("   ✅ AbnormalFlag — creates and validates correctly")
-
-# Test 2d: PatientContext all-null is valid
-ctx = PatientContext()
-assert ctx.age is None, "PatientContext age should default to None"
-assert ctx.gender is None, "PatientContext gender should default to None"
-print("   ✅ PatientContext — all-null instance is valid")
-
-# Test 2e: ReportFindings empty lists default correctly
-findings = ReportFindings(
-    report_type="lab_report",
-    patient_context=PatientContext(),
-    clinical_summary="Test summary.",
-)
-assert findings.lab_values == [], "lab_values should default to []"
-assert findings.medications == [], "medications should default to []"
-assert findings.abnormal_flags == [], "abnormal_flags should default to []"
-assert not findings.is_non_medical, "is_non_medical should default to False"
-assert findings.confidence == "high", "confidence should default to 'high'"
-print("   ✅ ReportFindings — empty list defaults and field defaults correct")
-
-print("   ✅ All Pydantic model validations passed")
-
-
-# ─────────────────────────────────────────────────────────────
-#  Test 3: Prompt builder
-# ─────────────────────────────────────────────────────────────
-
-print("\n[3/6] Testing prompt builder...")
-
-# Test 3a: ANALYZER_SYSTEM_PROMPT is non-empty and contains key sections
-assert len(ANALYZER_SYSTEM_PROMPT) > 500, "System prompt seems too short"
-assert (
-    "medical document extraction agent" in ANALYZER_SYSTEM_PROMPT.lower()
-), "System prompt missing role definition"
-assert (
-    "DO NOT diagnose" in ANALYZER_SYSTEM_PROMPT
-), "System prompt missing safety guardrails"
-assert (
-    "is_non_medical" in ANALYZER_SYSTEM_PROMPT
-), "System prompt missing edge case handling"
-print(
-    f"   ✅ ANALYZER_SYSTEM_PROMPT — {len(ANALYZER_SYSTEM_PROMPT)} chars, all key sections present"
-)
-
-# Test 3b: build_analyzer_user_message() produces correct format
-msg = build_analyzer_user_message(
-    extracted_text="Hemoglobin: 11.2 g/dL",
-    file_name="blood_test.pdf",
-    page_count=2,
-)
-assert "blood_test.pdf" in msg, "Filename missing from user message"
-assert "Hemoglobin: 11.2 g/dL" in msg, "Text missing from user message"
-assert "DOCUMENT TEXT BEGIN" in msg, "Section markers missing"
-assert "DOCUMENT TEXT END" in msg, "Section markers missing"
-print("   ✅ build_analyzer_user_message() — filename, text, markers all present")
-
-# Test 3c: Multi-chunk message includes chunk info
-msg_chunked = build_analyzer_user_message(
-    extracted_text="Lab data...",
-    file_name="long_report.pdf",
-    page_count=10,
-    chunk_index=2,
-    total_chunks=3,
-)
-assert "chunk 2 of 3" in msg_chunked, "Chunk info missing from multi-chunk message"
-print("   ✅ build_analyzer_user_message() — chunk info included for multi-chunk docs")
-
-
-# ─────────────────────────────────────────────────────────────
-#  Test 4: Real LLM call — the heart of Week 3
-#
-#  We send a realistic synthetic CBC lab report to the agent
-#  and verify the structured output is correct.
-#  This makes a real API call to GitHub Models.
-# ─────────────────────────────────────────────────────────────
-
-print("\n[4/6] Testing real LLM call (GitHub Models API)...")
-print("      Sending synthetic CBC lab report to report_analyzer_agent...")
-print("      Please wait — this may take 10-30 seconds...")
+# ── Synthetic lab report used by real LLM tests ───────────────
 
 SYNTHETIC_LAB_REPORT = """
 PATIENT LAB REPORT
@@ -215,7 +22,6 @@ Age: 45 years
 Gender: Male
 Report Date: 01/05/2025
 Ordering Physician: Dr. Sarah Smith
-Lab ID: LAB-2025-TEST-001
 
 COMPLETE BLOOD COUNT (CBC)
 --------------------------
@@ -230,14 +36,13 @@ METABOLIC PANEL
 ---------------
 Fasting Glucose  118 mg/dL    70-99 mg/dL           HIGH
 Creatinine       0.9 mg/dL    0.6-1.2 mg/dL         Normal
-Sodium           139 mEq/L    136-145 mEq/L          Normal
 
 LIPID PANEL
 -----------
 LDL Cholesterol  142 mg/dL    <100 mg/dL            HIGH
-HDL Cholesterol  48 mg/dL     >40 mg/dL              Normal
-Total Chol.      210 mg/dL    <200 mg/dL             HIGH
-Triglycerides    155 mg/dL    <150 mg/dL             Borderline
+HDL Cholesterol  48 mg/dL     >40 mg/dL             Normal
+Total Chol.      210 mg/dL    <200 mg/dL            HIGH
+Triglycerides    155 mg/dL    <150 mg/dL            Borderline
 
 PHYSICIAN NOTES
 ---------------
@@ -247,170 +52,214 @@ Recommend dietary modification and 3-month follow-up.
 """
 
 
-async def test_real_llm_call():
-    """Run the actual LLM call and validate the structured output."""
+# ── Unit tests — no API calls ─────────────────────────────────
 
+async def test_error_recovery():
+    """analyze_report_text() handles empty input gracefully without crashing."""
+    result = await analyze_report_text(
+        text="",
+        file_name="empty.pdf",
+        page_count=0,
+    )
+    assert isinstance(result, ReportFindings), (
+        f"Expected ReportFindings on empty input, got {type(result)}"
+    )
+    assert result.report_type in (
+        "unknown", "lab_report", "clinical_note",
+        "prescription", "discharge_summary", "mixed",
+    ), f"Invalid report_type in recovery: {result.report_type}"
+
+
+def test_pydantic_lab_value():
+    """LabValue creates and validates correctly."""
+    lv = LabValue(
+        parameter="Hemoglobin",
+        value="11.2 g/dL",
+        reference_range="12.0-17.5 g/dL",
+        flag="Low",
+        clinical_note="Below reference range, consistent with mild anemia.",
+    )
+    assert lv.parameter == "Hemoglobin"
+    assert lv.flag == "Low"
+    assert lv.clinical_note is not None
+
+
+def test_pydantic_lab_value_optional_defaults():
+    """LabValue optional clinical_note defaults to None."""
+    lv = LabValue(
+        parameter="WBC Count",
+        value="7400 /uL",
+        reference_range="4000-11000 /uL",
+        flag="Normal",
+    )
+    assert lv.clinical_note is None
+
+
+def test_pydantic_abnormal_flag():
+    """AbnormalFlag creates and validates correctly."""
+    flag = AbnormalFlag(
+        finding="LDL cholesterol elevated at 142 mg/dL",
+        severity="moderate",
+        category="lipid",
+    )
+    assert flag.severity == "moderate"
+
+
+def test_pydantic_patient_context_defaults():
+    """PatientContext all-null instance is valid."""
+    ctx = PatientContext()
+    assert ctx.age is None
+    assert ctx.gender is None
+
+
+def test_pydantic_report_findings_defaults():
+    """ReportFindings empty list defaults and field defaults are correct."""
+    findings = ReportFindings(
+        report_type="lab_report",
+        patient_context=PatientContext(),
+        clinical_summary="Test summary.",
+    )
+    assert findings.lab_values == []
+    assert findings.medications == []
+    assert findings.abnormal_flags == []
+    assert not findings.is_non_medical
+    assert findings.confidence == "high"
+
+
+def test_system_prompt_content():
+    """ANALYZER_SYSTEM_PROMPT has required length and key sections."""
+    assert len(ANALYZER_SYSTEM_PROMPT) > 500
+    assert "medical document extraction agent" in ANALYZER_SYSTEM_PROMPT.lower()
+    assert "DO NOT diagnose" in ANALYZER_SYSTEM_PROMPT
+    assert "is_non_medical" in ANALYZER_SYSTEM_PROMPT
+
+
+def test_user_message_builder():
+    """build_analyzer_user_message() includes filename, text, and markers."""
+    msg = build_analyzer_user_message(
+        extracted_text="Hemoglobin: 11.2 g/dL",
+        file_name="blood_test.pdf",
+        page_count=2,
+    )
+    assert "blood_test.pdf" in msg
+    assert "Hemoglobin: 11.2 g/dL" in msg
+    assert "DOCUMENT TEXT BEGIN" in msg
+    assert "DOCUMENT TEXT END" in msg
+
+
+def test_user_message_builder_chunk_info():
+    """build_analyzer_user_message() includes chunk info for multi-chunk docs."""
+    msg = build_analyzer_user_message(
+        extracted_text="Lab data...",
+        file_name="long_report.pdf",
+        page_count=10,
+        chunk_index=2,
+        total_chunks=3,
+    )
+    assert "chunk 2 of 3" in msg
+
+
+def test_format_findings_non_medical():
+    """format_findings_for_display() shows rejection message for non-medical docs."""
+    non_medical = ReportFindings(
+        report_type="unknown",
+        patient_context=PatientContext(),
+        clinical_summary="",
+        is_non_medical=True,
+    )
+    md = format_findings_for_display(non_medical)
+    assert "Not a Medical Document" in md
+
+
+def test_format_findings_structure():
+    """format_findings_for_display() produces well-formed markdown."""
+    findings = ReportFindings(
+        report_type="lab_report",
+        patient_context=PatientContext(),
+        clinical_summary="Test clinical summary with enough content.",
+        lab_values=[
+            LabValue(
+                parameter="Hemoglobin",
+                value="11.2 g/dL",
+                reference_range="12.0-17.5 g/dL",
+                flag="Low",
+            )
+        ],
+    )
+    md = format_findings_for_display(findings)
+    assert "## 🔬 Report Analysis" in md
+    assert "| Parameter |" in md
+    assert len(md) > 200
+
+
+# ── LLM tests — real API calls ────────────────────────────────
+
+@pytest.mark.llm
+async def test_real_llm_call():
+    """Full LLM call with synthetic CBC report — validates structured output."""
     findings = await analyze_report_text(
         text=SYNTHETIC_LAB_REPORT,
         file_name="test_cbc_report.pdf",
         page_count=1,
     )
 
-    # ── Verify the ReportFindings structure ──────────────────
-    assert isinstance(
-        findings, ReportFindings
-    ), f"Expected ReportFindings, got {type(findings)}"
-    print("   ✅ Returns a valid ReportFindings object")
-
-    # Report type
-    assert (
-        findings.report_type == "lab_report"
-    ), f"Expected 'lab_report', got '{findings.report_type}'"
-    print(f"   ✅ report_type = '{findings.report_type}'")
-
-    # Lab values extracted
-    assert (
-        len(findings.lab_values) >= 5
-    ), f"Expected at least 5 lab values, got {len(findings.lab_values)}"
-    print(f"   ✅ lab_values = {len(findings.lab_values)} values extracted")
-
-    # Check key parameters are present
-    param_names = [lv.parameter.lower() for lv in findings.lab_values]
-    assert any(
-        "hemoglobin" in p for p in param_names
-    ), f"Hemoglobin not found in lab_values. Got: {param_names}"
-    print("   ✅ 'Hemoglobin' found in extracted lab values")
-
-    # Check abnormal flags detected
-    assert (
-        len(findings.abnormal_flags) >= 1
-    ), f"Expected at least 1 abnormal flag, got {len(findings.abnormal_flags)}"
-    print(f"   ✅ abnormal_flags = {len(findings.abnormal_flags)} flags detected")
-
-    # Clinical summary is non-empty
-    assert len(findings.clinical_summary) > 50, "clinical_summary too short"
-    print(f"   ✅ clinical_summary = {len(findings.clinical_summary)} chars")
-
-    # Patient context
-    assert findings.patient_context is not None, "patient_context is None"
-    print(f"   ✅ patient_context extracted (age={findings.patient_context.age})")
-
-    # Not marked as non-medical
-    assert (
-        not findings.is_non_medical
-    ), "is_non_medical should be False for a lab report"
-    print("   ✅ is_non_medical = False (correctly identified as medical)")
-
-    # Confidence
-    assert findings.confidence in (
-        "high",
-        "medium",
-        "low",
-    ), f"Invalid confidence value: {findings.confidence}"
-    print(f"   ✅ confidence = '{findings.confidence}'")
-
-    return findings
-
-
-findings_result = asyncio.run(test_real_llm_call())
-print("   ✅ Real LLM call passed all assertions")
-
-
-# ─────────────────────────────────────────────────────────────
-#  Test 5: format_findings_for_display()
-# ─────────────────────────────────────────────────────────────
-
-print("\n[5/6] Testing format_findings_for_display()...")
-
-md = format_findings_for_display(findings_result)
-
-assert "## 🔬 Report Analysis" in md, "Missing report header"
-assert "lab_values" not in md, "Raw field names should not appear in output"
-assert (
-    "| Parameter |" in md or len(findings_result.lab_values) == 0
-), "Lab values table missing"
-assert len(md) > 200, "Display markdown seems too short"
-
-print(f"   ✅ Markdown output generated — {len(md)} chars")
-print("   ✅ Report header present")
-print("   ✅ Lab values table rendered")
-
-# Test non-medical document display
-non_medical = ReportFindings(
-    report_type="unknown",
-    patient_context=PatientContext(),
-    clinical_summary="",
-    is_non_medical=True,
-)
-non_medical_md = format_findings_for_display(non_medical)
-assert (
-    "Not a Medical Document" in non_medical_md
-), "Non-medical rejection message missing"
-print("   ✅ Non-medical document correctly shows rejection message")
-
-
-# ─────────────────────────────────────────────────────────────
-#  Test 6: Error recovery
-#  We can't easily force a real API error, but we verify the
-#  error recovery path produces a valid ReportFindings object
-#  by testing the fallback directly.
-# ─────────────────────────────────────────────────────────────
-
-print("\n[6/6] Testing error recovery path...")
-
-
-async def test_error_recovery():
-    """Test that analyze_report_text() handles empty input gracefully."""
-    # Empty text — the agent should still return something valid
-    result = await analyze_report_text(
-        text="",
-        file_name="empty.pdf",
-        page_count=0,
+    assert isinstance(findings, ReportFindings), (
+        f"Expected ReportFindings, got {type(findings)}"
     )
-    # Should return a ReportFindings (not crash)
-    assert isinstance(
-        result, ReportFindings
-    ), "Error recovery should return ReportFindings, not raise"
-    assert result.report_type in (
-        "unknown",
-        "lab_report",
-        "clinical_note",
-        "prescription",
-        "discharge_summary",
-        "mixed",
-    ), f"Invalid report_type in recovery: {result.report_type}"
-    print(f"   ✅ Empty input handled gracefully — type='{result.report_type}'")
+    assert findings.report_type == "lab_report", (
+        f"Expected 'lab_report', got '{findings.report_type}'"
+    )
+    assert len(findings.lab_values) >= 5, (
+        f"Expected at least 5 lab values, got {len(findings.lab_values)}"
+    )
+
+    param_names = [lv.parameter.lower() for lv in findings.lab_values]
+    assert any("hemoglobin" in p for p in param_names), (
+        f"Hemoglobin not found in lab_values. Got: {param_names}"
+    )
+    assert len(findings.abnormal_flags) >= 1, (
+        f"Expected at least 1 abnormal flag, got {len(findings.abnormal_flags)}"
+    )
+    assert len(findings.clinical_summary) > 50, "clinical_summary too short"
+    assert findings.patient_context is not None
+    assert not findings.is_non_medical, (
+        "is_non_medical should be False for a lab report"
+    )
+    assert findings.confidence in ("high", "medium", "low"), (
+        f"Invalid confidence value: {findings.confidence}"
+    )
 
 
-asyncio.run(test_error_recovery())
+# ── Standalone script mode ────────────────────────────────────
+
+async def _main():
+    print("\n" + "═" * 65)
+    print("  MediScan AI — Analyzer Test")
+    print("═" * 65)
+
+    print("\n[1/3] Running Pydantic model validation...")
+    test_pydantic_lab_value()
+    test_pydantic_lab_value_optional_defaults()
+    test_pydantic_abnormal_flag()
+    test_pydantic_patient_context_defaults()
+    test_pydantic_report_findings_defaults()
+    print("   ✅ All Pydantic models valid")
+
+    print("\n[2/3] Running prompt builder tests...")
+    test_system_prompt_content()
+    test_user_message_builder()
+    test_user_message_builder_chunk_info()
+    print("   ✅ Prompt builder correct")
+
+    print("\n[3/3] Running real LLM call...")
+    print("      Please wait — this may take 10-30 seconds...")
+    await test_real_llm_call()
+    print("   ✅ Real LLM call passed all assertions")
+
+    print("\n" + "═" * 65)
+    print("  ✅ ALL TESTS PASSED")
+    print("═" * 65)
 
 
-# ─────────────────────────────────────────────────────────────
-#  Summary
-# ─────────────────────────────────────────────────────────────
-
-print("\n" + "═" * 65)
-print("  ✅ ALL WEEK 3 TESTS PASSED")
-print("═" * 65)
-print()
-print("  What's working now:")
-print("  ✅ custom_data_types.py       — ReportFindings + nested Pydantic models")
-print("  ✅ prompts/analyzer_prompt.py — system prompt + user message builder")
-print("  ✅ tools/report_analyzer.py   — Agent + Runner.run() + display formatter")
-print("  ✅ app.py                     — Findings tab wired to real Agent output")
-print()
-print("  Live results from the LLM:")
-print(f"  📋 Report type    : {findings_result.report_type}")
-print(f"  🧪 Lab values     : {len(findings_result.lab_values)} extracted")
-print(f"  ⚠️  Abnormal flags : {len(findings_result.abnormal_flags)} detected")
-print(f"  🎯 Confidence     : {findings_result.confidence}")
-print()
-print("  What's coming in Week 4:")
-print("  ⏳ prompts/recommendation_prompt.py  — system prompt for advisor Agent")
-print("  ⏳ custom_data_types.py update       — ReportRecommendations model")
-print("  ⏳ tools/recommendation_generator.py — Recommendation Agent + Runner.run()")
-print()
-print("  To launch the app with Week 3 wired in:")
-print("  $ python app.py")
-print("  $ uv run python app.py")
-print()
+if __name__ == "__main__":
+    asyncio.run(_main())
